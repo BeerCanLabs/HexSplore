@@ -2,9 +2,12 @@
  * HexSplore — app.js
  *
  * Full-screen SQUARE-grid map. Browser-only layer: responsive canvas sizing,
- * procedural grassy-field tile rendering, vector trees/rocks obstacles, blue
- * water ponds, gems collection, gold treasure chests, fog of war, and responsive
- * click-to-move handling.
+ * camera-centric scrolling centered on the player, procedural grassy-field 
+ * tile rendering, vector trees/rocks obstacles, blue water ponds, gems collection, 
+ * gold treasure chests, fog of war, and responsive click-to-move handling.
+ *
+ * The board expands infinitely in all directions when the player steps on any edge
+ * of the current map boundary, pushing negative coordinates cleanly.
  *
  * ALL game rules live in game-core.js (window.HexCore).
  */
@@ -36,9 +39,9 @@
   let state = Core.createState(COLS, ROWS, { richMode: true });
   let hoverKey = null;
 
-  // Layout computed on every resize: tile size + board origin so the grid is
-  // centered and fills as much of the viewport as possible.
-  let layout = { tile: 64, originX: 0, originY: 0, w: 0, h: 0 };
+  // Layout computed on every resize: comfortable tile size.
+  // The camera centers the player in the middle of the viewport.
+  let layout = { tile: 64 };
 
   // Per-tile deterministic RNG seed so grass tufts stay stable across redraws.
   function tileSeed(c, r) {
@@ -58,7 +61,7 @@
     };
   }
 
-  // ── Responsive sizing ─────────────────────────────────────────────────────
+  // ── Responsive Camera & Sizing ────────────────────────────────────────────
 
   function resize() {
     const dpr = window.devicePixelRatio || 1;
@@ -69,30 +72,35 @@
     canvas.height = Math.floor(vh * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Largest square tile that fits the whole grid in the viewport.
-    const tile = Math.floor(Math.min(vw / COLS, vh / ROWS));
-    const w = tile * COLS;
-    const h = tile * ROWS;
-    layout = {
-      tile,
-      w,
-      h,
-      originX: Math.floor((vw - w) / 2),
-      originY: Math.floor((vh - h) / 2),
-    };
+    // Comfortable, responsive tile size scaled to viewport size
+    layout.tile = Math.max(54, Math.floor(Math.min(vw, vh) * 0.12));
+    if (layout.tile > 88) layout.tile = 88; // cap max size
+
     draw();
   }
 
-  // Tile top-left pixel.
+  // Camera-centric tile coordinate translation (centered on player pawn)
   function tilePixel(c, r) {
-    return { x: layout.originX + c * layout.tile, y: layout.originY + r * layout.tile };
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    const dx = c - state.player.c;
+    const dy = r - state.player.r;
+    return {
+      x: Math.floor(centerX + (dx - 0.5) * layout.tile),
+      y: Math.floor(centerY + (dy - 0.5) * layout.tile)
+    };
   }
 
-  // Convert a viewport pixel to a grid coordinate (may be off-board).
+  // Convert a screen pixel back to coordinate matching camera center
   function pixelToTile(x, y) {
-    const c = Math.floor((x - layout.originX) / layout.tile);
-    const r = Math.floor((y - layout.originY) / layout.tile);
-    return { c, r };
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    const dx = (x - centerX) / layout.tile + 0.5;
+    const dy = (y - centerY) / layout.tile + 0.5;
+    return {
+      c: Math.floor(state.player.c + dx),
+      r: Math.floor(state.player.r + dy)
+    };
   }
 
   // ── Rich tile rendering with terrain & Fog of War ──────────────────────────
@@ -107,14 +115,14 @@
       ctx.fillRect(x, y, size, size);
 
       // Render misty rolling clouds
-      ctx.fillStyle = "rgba(255, 255, 255, 0.02)";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.025)";
       ctx.beginPath();
       ctx.arc(x + size * 0.4, y + size * 0.4, size * 0.22, 0, Math.PI * 2);
       ctx.arc(x + size * 0.6, y + size * 0.5, size * 0.26, 0, Math.PI * 2);
       ctx.fill();
 
       // Subtle tile border inside fog
-      ctx.strokeStyle = "rgba(255,255,255,0.03)";
+      ctx.strokeStyle = "rgba(255,255,255,0.035)";
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
       return;
@@ -445,8 +453,6 @@
   // ── Chess-piece (pawn) player ──────────────────────────────────────────────
 
   function drawPawn(cx, baseY, size) {
-    // A vector pawn: base, collar, body (bell), and head. Drawn in white-ivory
-    // with shading so it reads as a chess piece on the field.
     const s = size; // tile size scale reference
     ctx.save();
 
@@ -523,21 +529,27 @@
   // ── Full draw ────────────────────────────────────────────────────────────────
 
   function draw() {
-    // Fill the whole viewport (a border of field color around the grid).
-    ctx.fillStyle = "#1e3d1a"; // dark forest moss background
+    // Fill the whole viewport with deep dark forest color.
+    ctx.fillStyle = "#11220e";
     ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
     const size = layout.tile;
     const playerKey = Core.key(state.player.c, state.player.r);
 
-    for (const tile of Core.generateBoard(COLS, ROWS)) {
+    // Draw all active tiles on the dynamically expanding board
+    for (const tile of Core.generateBoard(state)) {
       const { x, y } = tilePixel(tile.c, tile.r);
       const k = Core.key(tile.c, tile.r);
       
+      // Safety clip: only render if tile is on/near the screen boundaries to keep drawing ultra-fast!
+      if (x < -size || x > window.innerWidth + size || y < -size || y > window.innerHeight + size) {
+        continue;
+      }
+
       // Determine if reachable
       const reachable = Core.canMoveTo(state, tile.c, tile.r);
       
-      // Reachable indicator only visible if revealed
+      // Reachable indicators are only visible on revealed tiles
       const isReachableAndRevealed = reachable && (state.revealed && state.revealed.includes(k));
 
       drawTile(x, y, size, tile.c, tile.r, {
@@ -548,9 +560,10 @@
       });
     }
 
-    // Player on top, feet centered near the bottom of its tile.
-    const pp = tilePixel(state.player.c, state.player.r);
-    drawPawn(pp.x + size / 2, pp.y + size * 0.82, size);
+    // Player pawn is always drawn locked at the exact screen center!
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    drawPawn(centerX, centerY + size * 0.32, size);
   }
 
   // ── Input ─────────────────────────────────────────────────────────────────────
@@ -586,7 +599,7 @@
       vGemsEl.textContent = `${state.gemsCollected}/${state.totalGems}`;
       
       // Percent explored calculation
-      const totalTiles = COLS * ROWS;
+      const totalTiles = Core.tileCount(state);
       const exploredCount = state.visited.length;
       const percentExplored = Math.round((exploredCount / totalTiles) * 100);
       vExploredEl.textContent = `${percentExplored}%`;
@@ -602,7 +615,9 @@
 
     const t = pixelToTile(px, py);
     if (t.c === state.player.c && t.r === state.player.r) return;
-    if (!Core.isOnBoard(t.c, t.r, COLS, ROWS)) return;
+    
+    // Check if target is legal coordinate boundary in current state
+    if (!Core.isOnBoard(t.c, t.r, state)) return;
 
     const k = Core.key(t.c, t.r);
     
@@ -619,13 +634,23 @@
     }
 
     const previousGems = state.gemsCollected;
+    const oldMinCol = state.minCol;
+    const oldMaxCol = state.maxCol;
+    const oldMinRow = state.minRow;
+    const oldMaxRow = state.maxRow;
+
     state = Core.move(state, t.c, t.r);
     
-    // Feedback for gems collection
+    // Feedback for boundary expansion!
+    const expanded = (state.minCol !== oldMinCol || state.maxCol !== oldMaxCol || 
+                      state.minRow !== oldMinRow || state.maxRow !== oldMaxRow);
+
     if (state.gemsCollected > previousGems) {
       setStatus(`💎 Collected a sparkling ruby! (${state.gemsCollected}/${state.totalGems})`);
     } else if (state.victory) {
       setStatus("👑 Found the Golden Chest! Victory!");
+    } else if (expanded) {
+      setStatus("🌫️ The mist recedes! Map boundary expanded!");
     } else {
       setStatus(`Move ${state.moves}`);
     }
@@ -647,7 +672,7 @@
     const k = Core.key(t.c, t.r);
     
     // Hover ONLY works on revealed, reachable tiles
-    const isHoverValid = Core.isOnBoard(t.c, t.r, COLS, ROWS) && 
+    const isHoverValid = Core.isOnBoard(t.c, t.r, state) && 
                          Core.canMoveTo(state, t.c, t.r) &&
                          (state.revealed && state.revealed.includes(k));
 

@@ -15,7 +15,7 @@ keep passing on every commit (`npm test`, Node's built-in runner, no deps).
 | Move counter | Each legal move increases the move count by exactly one. | `moving to a neighbor increments the move counter` |
 | Diagonals | Diagonal squares are direct neighbors and can be moved to, counting as one move. | `a diagonal move is legal and counts as one move` |
 | Only neighbors | Non-adjacent squares cannot be reached and never change game state. | `the player cannot teleport to a non-neighbor tile` |
-| Stay on the field | Moves off the edge of the field are rejected without mutation. | `the player cannot move off the edge of the board` |
+| Stay on the field | Moves off the edge of the expanded board are rejected without mutation. | `the player cannot move off the edge of the board` |
 | No self-move | Clicking the pawn's own square does not count as a move. | `the player cannot stand still (moving onto self is illegal)` |
 | Explored tiles | Tiles the pawn has stood on are remembered; revisiting still counts as a move but not a new visit. | `revisiting a tile still counts as a move but not a new visit` |
 | Pure state | `move()` returns a new state and never mutates the previous one. | `move() does not mutate the previous state` |
@@ -24,6 +24,10 @@ keep passing on every commit (`npm test`, Node's built-in runner, no deps).
 | Gem Collection | Landing on a gem tile collects the gem and increments the gem count. | `collecting gems increases count and removes gem from board` |
 | Chest Victory | Reaching the chest tile triggers victory and finishes the world. | `reaching chest triggers victory` |
 | Fog of War | Tiles beyond a sight range of 2 Chebyshev distance start shrouded in fog and reveal as the player moves. | `fog of war reveals adjacent areas on move` |
+| Dynamic Expansion Left | Landing on the left-most boundary tile dynamically expands the board by 3 columns of new terrain to the left (negative coordinates). | `moving to left boundary expands board to left` |
+| Dynamic Expansion Right | Landing on the right-most boundary tile dynamically expands the board by 3 columns of new terrain to the right. | `moving to right boundary expands board to right` |
+| Dynamic Expansion Up | Landing on the top-most boundary tile dynamically expands the board by 3 rows of new terrain upward (negative coordinates). | `moving to top boundary expands board upward` |
+| Dynamic Expansion Down | Landing on the bottom-most boundary tile dynamically expands the board by 3 rows of new terrain downward. | `moving to bottom boundary expands board downward` |
 
 ## Test command
 

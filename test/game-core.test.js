@@ -152,10 +152,11 @@ test("KPF: the player cannot move off the edge of the board", () => {
     const nr = Math.max(0, s.player.r - 1);
     s = move(s, nc, nr);
   }
-  assert.deepEqual(s.player, { c: 0, r: 0 });
-  assert.equal(canMoveTo(s, -1, 0), false);
-  assert.equal(canMoveTo(s, 0, -1), false);
-  assert.equal(canMoveTo(s, -1, -1), false);
+  // At (0,0) the board has expanded left and up to minCol = -3, minRow = -3.
+  // The player should not be able to move beyond the NEW boundaries.
+  assert.equal(canMoveTo(s, s.minCol - 1, 0), false);
+  assert.equal(canMoveTo(s, 0, s.minRow - 1), false);
+  assert.equal(canMoveTo(s, s.minCol - 1, s.minRow - 1), false);
 });
 
 test("KPF: the player cannot stand still (moving onto self is illegal)", () => {
@@ -238,4 +239,72 @@ test("KPF: fog of war reveals adjacent areas on move", () => {
   assert.ok(s.revealed.includes(farKey));
   assert.ok(s.revealed.includes(key(s.player.c + 2, s.player.r + 2)));
 });
+
+// ── Boundary Expansion Mechanics ───────────────────────────────────────────────
+
+test("KPF: moving to left boundary expands board to left", () => {
+  let s = createState(12, 9);
+  const startMinCol = s.minCol;
+  
+  // Walk to the original left boundary (0)
+  const targetCol = s.minCol;
+  while (s.player.c > targetCol) {
+    s = move(s, s.player.c - 1, s.player.r);
+  }
+  
+  // Now stand on edge (0). The board expands left (minCol decreases by 3)
+  assert.equal(s.minCol, startMinCol - 3);
+  assert.equal(s.maxCol, 11);
+  assert.equal(s.cols, 15);
+});
+
+test("KPF: moving to right boundary expands board to right", () => {
+  let s = createState(12, 9);
+  const startMaxCol = s.maxCol;
+  
+  // Walk to right edge (11)
+  const targetCol = s.maxCol;
+  while (s.player.c < targetCol) {
+    s = move(s, s.player.c + 1, s.player.r);
+  }
+  
+  // Land on maxCol (11) -> expands right
+  assert.equal(s.maxCol, startMaxCol + 3);
+  assert.equal(s.minCol, 0);
+  assert.equal(s.cols, 15);
+});
+
+test("KPF: moving to top boundary expands board upward", () => {
+  let s = createState(12, 9);
+  const startMinRow = s.minRow;
+  
+  // Walk to top edge (r = 0)
+  const targetRow = s.minRow;
+  while (s.player.r > targetRow) {
+    s = move(s, s.player.c, s.player.r - 1);
+  }
+  
+  // Land on edge -> expands up (minRow decreases by 3)
+  assert.equal(s.minRow, startMinRow - 3);
+  assert.equal(s.maxRow, 8);
+  assert.equal(s.rows, 12);
+});
+
+test("KPF: moving to bottom boundary expands board downward", () => {
+  let s = createState(12, 9);
+  const startMaxRow = s.maxRow;
+  
+  // Walk to bottom edge (r = 8)
+  const targetRow = s.maxRow;
+  while (s.player.r < targetRow) {
+    s = move(s, s.player.c, s.player.r + 1);
+  }
+  
+  // Land on edge -> expands down
+  assert.equal(s.maxRow, startMaxRow + 3);
+  assert.equal(s.minRow, 0);
+  assert.equal(s.rows, 12);
+});
+
+
 

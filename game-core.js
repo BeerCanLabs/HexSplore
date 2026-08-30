@@ -5,7 +5,9 @@
  * the browser (window.HexCore) and the Node test runner (module.exports), which
  * is what lets the deploy pipeline gate on `node --test`.
  *
- * Coordinate system: (col, row). Origin (0,0) is the top-left tile.
+ * Coordinate system: (col, row). Origin (0,0) is the top-left tile at start.
+ * Board can expand infinitely in all directions when the player hits the boundary,
+ * pushing bounds into negative coordinates cleanly.
  * Movement is 8-directional (orthogonal + diagonal, like a chess king).
  */
 (function (root, factory) {
@@ -34,8 +36,25 @@
     return `${c},${r}`;
   }
 
-  // Build every tile of a COLS x ROWS board. Returns { c, r } in row-major order.
-  function generateBoard(cols = DEFAULT_COLS, rows = DEFAULT_ROWS) {
+  // Build every tile of a COLS x ROWS board or the current state bounding box.
+  function generateBoard(colsOrState = DEFAULT_COLS, rows = DEFAULT_ROWS) {
+    if (colsOrState && typeof colsOrState === "object") {
+      const state = colsOrState;
+      const tiles = [];
+      const minCol = typeof state.minCol !== "undefined" ? state.minCol : 0;
+      const maxCol = typeof state.maxCol !== "undefined" ? state.maxCol : DEFAULT_COLS - 1;
+      const minRow = typeof state.minRow !== "undefined" ? state.minRow : 0;
+      const maxRow = typeof state.maxRow !== "undefined" ? state.maxRow : DEFAULT_ROWS - 1;
+
+      for (let r = minRow; r <= maxRow; r++) {
+        for (let c = minCol; c <= maxCol; c++) {
+          tiles.push({ c, r });
+        }
+      }
+      return tiles;
+    }
+
+    const cols = colsOrState;
     if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 1 || rows < 1) {
       throw new Error("cols and rows must be positive integers");
     }
@@ -48,13 +67,22 @@
     return tiles;
   }
 
-  // Number of tiles on a cols x rows board.
-  function tileCount(cols = DEFAULT_COLS, rows = DEFAULT_ROWS) {
-    return cols * rows;
+  // Number of tiles on a cols x rows board or state.
+  function tileCount(colsOrState = DEFAULT_COLS, rows = DEFAULT_ROWS) {
+    if (colsOrState && typeof colsOrState === "object") {
+      const state = colsOrState;
+      return (state.maxCol - state.minCol + 1) * (state.maxRow - state.minRow + 1);
+    }
+    return colsOrState * rows;
   }
 
-  // True if a coordinate lies within a cols x rows board.
-  function isOnBoard(c, r, cols = DEFAULT_COLS, rows = DEFAULT_ROWS) {
+  // True if a coordinate lies within the board bounds.
+  function isOnBoard(c, r, colsOrState = DEFAULT_COLS, rows = DEFAULT_ROWS) {
+    if (colsOrState && typeof colsOrState === "object") {
+      const state = colsOrState;
+      return c >= state.minCol && c <= state.maxCol && r >= state.minRow && r <= state.maxRow;
+    }
+    const cols = colsOrState;
     return c >= 0 && c < cols && r >= 0 && r < rows;
   }
 
@@ -63,9 +91,9 @@
     return DIRECTIONS.map((d) => ({ c: c + d.c, r: r + d.r }));
   }
 
-  // Neighbors that actually exist on a cols x rows board.
-  function neighborsOnBoard(c, r, cols = DEFAULT_COLS, rows = DEFAULT_ROWS) {
-    return neighbors(c, r).filter((n) => isOnBoard(n.c, n.r, cols, rows));
+  // Neighbors that actually exist on a board.
+  function neighborsOnBoard(c, r, colsOrState = DEFAULT_COLS, rows = DEFAULT_ROWS) {
+    return neighbors(c, r).filter((n) => isOnBoard(n.c, n.r, colsOrState, rows));
   }
 
   // Chebyshev distance (king moves) between two tiles.
@@ -82,8 +110,8 @@
   // ── Procedural layout generation ───────────────────────────────────────────
 
   function generateRichLayout(state) {
-    const cols = state.cols;
-    const rows = state.rows;
+    const cols = state.maxCol - state.minCol + 1;
+    const rows = state.maxRow - state.minRow + 1;
     const start = state.player;
 
     let attempts = 0;
@@ -95,8 +123,8 @@
       let chest = null;
 
       // 1. Generate random terrain for each tile
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
+      for (let r = state.minRow; r <= state.maxRow; r++) {
+        for (let c = state.minCol; c <= state.maxCol; c++) {
           const k = key(c, r);
           
           // Keep starting tile and its immediate 8 neighbors clear grass
@@ -132,7 +160,7 @@
         for (const d of DIRECTIONS) {
           const nc = curr.c + d.c;
           const nr = curr.r + d.r;
-          if (isOnBoard(nc, nr, cols, rows)) {
+          if (isOnBoard(nc, nr, state)) {
             const nk = key(nc, nr);
             if (!visitedSet.has(nk) && !obstacleSet.has(nk)) {
               visitedSet.add(nk);
@@ -186,7 +214,7 @@
         for (let dc = -R_RANGE; dc <= R_RANGE; dc++) {
           const nc = start.c + dc;
           const nr = start.r + dr;
-          if (isOnBoard(nc, nr, cols, rows)) {
+          if (isOnBoard(nc, nr, state)) {
             const nk = key(nc, nr);
             if (!revealed.includes(nk)) {
               revealed.push(nk);
@@ -218,6 +246,27 @@
     state.victory = false;
   }
 
+  // Generates terrain and potentially gems for newly expanded board coordinates.
+  function generateNewRegion(stateWrapper, startCol, endCol, startRow, endRow, obstacles, water, gems) {
+    for (let r = startRow; r <= endRow; r++) {
+      for (let c = startCol; c <= endCol; c++) {
+        const k = key(c, r);
+        const rand = Math.random();
+        
+        // 12% Rocks/Trees obstacles, 10% Water ponds
+        if (rand < 0.12) {
+          obstacles.push(k);
+        } else if (rand < 0.22) {
+          water.push(k);
+        } else if (rand < 0.25) {
+          // 3% chance of a collectible gem on walkable new tiles
+          gems.push(k);
+          stateWrapper.totalGems++;
+        }
+      }
+    }
+  }
+
   // ── Game state ─────────────────────────────────────────────────────────────
 
   // Fresh game state: player parked on the center tile, zero moves made.
@@ -225,8 +274,10 @@
   function createState(cols = DEFAULT_COLS, rows = DEFAULT_ROWS, options = {}) {
     const start = { c: Math.floor(cols / 2), r: Math.floor(rows / 2) };
     const state = {
-      cols,
-      rows,
+      minCol: 0,
+      maxCol: cols - 1,
+      minRow: 0,
+      maxRow: rows - 1,
       player: { c: start.c, r: start.r },
       moves: 0,
       visited: [key(start.c, start.r)],
@@ -250,7 +301,7 @@
   // Can the player move to (c, r) from their current tile?
   // Legal only if the target is on the board AND a direct neighbor AND not blocked.
   function canMoveTo(state, c, r) {
-    if (!isOnBoard(c, r, state.cols, state.rows)) return false;
+    if (!isOnBoard(c, r, state)) return false;
     const k = key(c, r);
     if (state.obstacles && state.obstacles.includes(k)) return false;
     if (state.water && state.water.includes(k)) return false;
@@ -280,6 +331,45 @@
     const chestReached = state.chest && state.chest.c === c && state.chest.r === r;
     const victory = state.victory || !!chestReached;
 
+    // Boundary Expansion Checks!
+    let minCol = state.minCol;
+    let maxCol = state.maxCol;
+    let minRow = state.minRow;
+    let maxRow = state.maxRow;
+    let obstacles = state.obstacles ? state.obstacles.slice() : [];
+    let water = state.water ? state.water.slice() : [];
+    let totalGems = state.totalGems || 0;
+
+    const expandLeft = (c === minCol);
+    const expandRight = (c === maxCol);
+    const expandUp = (r === minRow);
+    const expandDown = (r === maxRow);
+
+    const stateWrapper = { totalGems };
+
+    if (expandLeft) {
+      const oldMin = minCol;
+      minCol -= 3;
+      generateNewRegion(stateWrapper, minCol, oldMin - 1, minRow, maxRow, obstacles, water, gems);
+    }
+    if (expandRight) {
+      const oldMax = maxCol;
+      maxCol += 3;
+      generateNewRegion(stateWrapper, oldMax + 1, maxCol, minRow, maxRow, obstacles, water, gems);
+    }
+    if (expandUp) {
+      const oldMin = minRow;
+      minRow -= 3;
+      generateNewRegion(stateWrapper, minCol, maxCol, minRow, oldMin - 1, obstacles, water, gems);
+    }
+    if (expandDown) {
+      const oldMax = maxRow;
+      maxRow += 3;
+      generateNewRegion(stateWrapper, minCol, maxCol, oldMax + 1, maxRow, obstacles, water, gems);
+    }
+
+    totalGems = stateWrapper.totalGems;
+
     // Reveal fog of war (sight range 2 = 5x5 area centered on player)
     let revealed = state.revealed ? state.revealed.slice() : [k];
     if (!revealed.includes(k)) {
@@ -290,7 +380,9 @@
       for (let dc = -R_RANGE; dc <= R_RANGE; dc++) {
         const nc = c + dc;
         const nr = r + dr;
-        if (isOnBoard(nc, nr, state.cols, state.rows)) {
+        // Check with the freshly expanded state bounds!
+        const tempState = { minCol, maxCol, minRow, maxRow };
+        if (isOnBoard(nc, nr, tempState)) {
           const nk = key(nc, nr);
           if (!revealed.includes(nk)) {
             revealed.push(nk);
@@ -300,18 +392,22 @@
     }
 
     return {
-      cols: state.cols,
-      rows: state.rows,
+      minCol,
+      maxCol,
+      minRow,
+      maxRow,
+      cols: maxCol - minCol + 1,
+      rows: maxRow - minRow + 1,
       player: { c, r },
       moves: state.moves + 1,
       visited,
-      obstacles: state.obstacles,
-      water: state.water,
+      obstacles,
+      water,
       gems,
       chest: state.chest,
       revealed,
       gemsCollected,
-      totalGems: state.totalGems,
+      totalGems,
       victory,
     };
   }
