@@ -2,15 +2,15 @@
 
 A tiny browser game played on a **full-screen grassy field of square tiles**.
 You control a **chess pawn** that starts in the center of the field. **Click any
-neighboring square — up, down, left, or right — to step onto it. Every step
-counts as a move.**
+neighboring square — including diagonals, like a chess king — to step onto it.
+Every step counts as a move.**
 
 Play it in the browser, no install required.
 
 ## Live
 
 Served from GitHub Pages (branch-deploy from `main`, repo root):
-**https://bestdax.github.io/HexSplore/**
+**https://beercanlabs.github.io/HexSplore/**
 
 > Note: an Actions-based `deploy.yml` (with a pre-deploy test gate) is the
 > intended CI. It couldn't be committed because the current token lacks the
