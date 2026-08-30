@@ -1,9 +1,9 @@
 {
   "name": "hexsplore",
   "private": true,
-  "description": "A browser hex-grid explorer. Click a neighboring tile to move; every step counts.",
+  "description": "A browser grid explorer on a grassy field. Click a neighboring square to move your chess pawn; every step counts.",
   "scripts": {
-    "start": "npx serve .",
+    "start": "node server.js",
     "test": "node --test"
   }
 }

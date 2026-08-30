@@ -1,118 +1,123 @@
 /*
  * HexSplore — game-core.js
  *
- * Pure, framework-free hex-grid logic. No DOM, no canvas. This module is
- * imported by both the browser (window.HexCore) and the Node test runner
+ * Pure, framework-free GRID logic. No DOM, no canvas. This module is imported
+ * by both the browser (window.HexCore) and the Node test runner
  * (module.exports), which is what lets the deploy pipeline gate on `node --test`.
  *
- * Coordinate system: axial (q, r) for a POINTY-TOP hex layout.
- * See https://www.redblobgames.com/grids/hexagons/ for the reference math.
+ * The world is a rectangular field of SQUARE tiles addressed by (x, y) with
+ * x in [0, width) and y in [0, height). Movement is orthogonal: a tile's
+ * neighbors are the squares directly up, down, left, and right of it. Moving
+ * onto a neighboring square counts as exactly one move. (The public API name
+ * `HexCore` is kept for backwards compatibility with existing markup.)
  */
 (function (root, factory) {
   const core = factory();
   if (typeof module !== "undefined" && module.exports) module.exports = core;
   root.HexCore = core;
 })(typeof window !== "undefined" ? window : globalThis, () => {
-  // Default board radius (in hexes) measured from the center tile.
-  const DEFAULT_RADIUS = 3;
+  // Default field size in tiles (a wide, roomy grassy field).
+  const DEFAULT_WIDTH = 12;
+  const DEFAULT_HEIGHT = 9;
 
-  // The six axial neighbor directions for a pointy-top hex grid.
+  // The four orthogonal neighbor directions for a square grid.
   const DIRECTIONS = [
-    { q: 1, r: 0 },
-    { q: 1, r: -1 },
-    { q: 0, r: -1 },
-    { q: -1, r: 0 },
-    { q: -1, r: 1 },
-    { q: 0, r: 1 },
+    { x: 1, y: 0 }, // right
+    { x: -1, y: 0 }, // left
+    { x: 0, y: 1 }, // down
+    { x: 0, y: -1 }, // up
   ];
 
-  // A stable string key for an axial coordinate, used for Set/Map membership.
-  function key(q, r) {
-    return `${q},${r}`;
+  // A stable string key for a coordinate, used for Set/Map membership.
+  function key(x, y) {
+    return `${x},${y}`;
   }
 
-  // Build the set of tiles that make up a hexagon-shaped board of `radius`.
-  // Returns an array of { q, r } in a deterministic order.
-  function generateBoard(radius = DEFAULT_RADIUS) {
-    if (!Number.isInteger(radius) || radius < 0) {
-      throw new Error("radius must be a non-negative integer");
+  // Build every tile of a width×height field, in row-major order.
+  function generateBoard(width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT) {
+    if (!Number.isInteger(width) || !Number.isInteger(height)) {
+      throw new Error("width and height must be integers");
+    }
+    if (width < 1 || height < 1) {
+      throw new Error("width and height must be at least 1");
     }
     const tiles = [];
-    for (let q = -radius; q <= radius; q++) {
-      const rLow = Math.max(-radius, -q - radius);
-      const rHigh = Math.min(radius, -q + radius);
-      for (let r = rLow; r <= rHigh; r++) {
-        // `+ 0` normalizes any -0 produced by the loop bounds to plain 0.
-        tiles.push({ q: q + 0, r: r + 0 });
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        tiles.push({ x, y });
       }
     }
     return tiles;
   }
 
-  // Number of tiles on a hex board of `radius`: 1 + 3*radius*(radius+1).
-  function tileCount(radius = DEFAULT_RADIUS) {
-    return 1 + 3 * radius * (radius + 1);
+  // Number of tiles on a width×height field.
+  function tileCount(width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT) {
+    return width * height;
   }
 
-  // True if a coordinate lies within a hexagon board of `radius`.
-  function isOnBoard(q, r, radius = DEFAULT_RADIUS) {
-    return hexDistance(0, 0, q, r) <= radius;
+  // True if (x, y) lies inside a width×height field.
+  function isOnBoard(x, y, width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT) {
+    return x >= 0 && y >= 0 && x < width && y < height;
   }
 
-  // The six neighbors of a tile, regardless of board bounds.
-  function neighbors(q, r) {
-    return DIRECTIONS.map((d) => ({ q: q + d.q, r: r + d.r }));
+  // The four neighbors of a tile, regardless of board bounds.
+  function neighbors(x, y) {
+    return DIRECTIONS.map((d) => ({ x: x + d.x, y: y + d.y }));
   }
 
-  // Neighbors that actually exist on a board of `radius`.
-  function neighborsOnBoard(q, r, radius = DEFAULT_RADIUS) {
-    return neighbors(q, r).filter((n) => isOnBoard(n.q, n.r, radius));
+  // Neighbors that actually exist on a width×height field.
+  function neighborsOnBoard(x, y, width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT) {
+    return neighbors(x, y).filter((n) => isOnBoard(n.x, n.y, width, height));
   }
 
-  // Axial distance between two hexes (number of steps along the grid).
-  function hexDistance(q1, r1, q2, r2) {
-    const dq = q1 - q2;
-    const dr = r1 - r2;
-    // Convert to cube and take the standard hex distance.
-    return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
+  // Manhattan distance between two squares (steps along the grid).
+  function gridDistance(x1, y1, x2, y2) {
+    return Math.abs(x1 - x2) + Math.abs(y1 - y2);
   }
 
-  // Are two tiles adjacent (exactly one step apart)?
-  function areNeighbors(q1, r1, q2, r2) {
-    if (q1 === q2 && r1 === r2) return false;
-    return hexDistance(q1, r1, q2, r2) === 1;
+  // Are two tiles orthogonally adjacent (exactly one step apart)?
+  function areNeighbors(x1, y1, x2, y2) {
+    if (x1 === x2 && y1 === y2) return false;
+    return gridDistance(x1, y1, x2, y2) === 1;
   }
 
   // ── Game state ─────────────────────────────────────────────────────────────
 
   // Fresh game state: player parked on the center tile, zero moves made.
-  function createState(radius = DEFAULT_RADIUS) {
+  function centerOf(width, height) {
+    return { x: Math.floor(width / 2), y: Math.floor(height / 2) };
+  }
+
+  function createState(width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT) {
+    const start = centerOf(width, height);
     return {
-      radius,
-      player: { q: 0, r: 0 },
+      width,
+      height,
+      player: { x: start.x, y: start.y },
       moves: 0,
-      visited: [key(0, 0)],
+      visited: [key(start.x, start.y)],
     };
   }
 
-  // Can the player move to (q, r) from their current tile?
+  // Can the player move to (x, y) from their current tile?
   // Legal only if the target is on the board AND a direct neighbor.
-  function canMoveTo(state, q, r) {
-    if (!isOnBoard(q, r, state.radius)) return false;
-    return areNeighbors(state.player.q, state.player.r, q, r);
+  function canMoveTo(state, x, y) {
+    if (!isOnBoard(x, y, state.width, state.height)) return false;
+    return areNeighbors(state.player.x, state.player.y, x, y);
   }
 
-  // Attempt to move the player to (q, r). Returns a NEW state object; the
-  // input state is never mutated. If the move is illegal, returns the state
-  // unchanged (moves counter does not advance).
-  function move(state, q, r) {
-    if (!canMoveTo(state, q, r)) return state;
-    const visited = state.visited.includes(key(q, r))
+  // Attempt to move the player to (x, y). Returns a NEW state object; the input
+  // state is never mutated. Illegal moves return the state unchanged (the moves
+  // counter does not advance).
+  function move(state, x, y) {
+    if (!canMoveTo(state, x, y)) return state;
+    const visited = state.visited.includes(key(x, y))
       ? state.visited.slice()
-      : state.visited.concat(key(q, r));
+      : state.visited.concat(key(x, y));
     return {
-      radius: state.radius,
-      player: { q, r },
+      width: state.width,
+      height: state.height,
+      player: { x, y },
       moves: state.moves + 1,
       visited,
     };
@@ -124,15 +129,17 @@
   }
 
   return {
-    DEFAULT_RADIUS,
+    DEFAULT_WIDTH,
+    DEFAULT_HEIGHT,
     DIRECTIONS,
     key,
+    centerOf,
     generateBoard,
     tileCount,
     isOnBoard,
     neighbors,
     neighborsOnBoard,
-    hexDistance,
+    gridDistance,
     areNeighbors,
     createState,
     canMoveTo,

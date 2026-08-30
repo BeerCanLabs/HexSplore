@@ -7,52 +7,36 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css?v=1" />
+    <link rel="stylesheet" href="style.css?v=2" />
   </head>
   <body>
-    <div class="bg-glow" aria-hidden="true"></div>
+    <!-- The field IS the game: a full-screen grassy square grid. -->
+    <canvas id="board" aria-label="Grassy field"></canvas>
 
-    <main class="game-shell">
-      <header>
-        <p class="eyebrow">A tiny hex-grid explorer</p>
-        <h1>HexSplore</h1>
-        <p class="tagline">
-          You are the glowing marker. Click any <em>neighboring</em> hex to step
-          onto it — every step counts as a move.
-        </p>
-      </header>
+    <!-- Minimal floating HUD overlaid on the field. -->
+    <div class="hud" role="group" aria-label="Game status">
+      <div class="hud-stat">
+        <span class="hud-label">Moves</span>
+        <span class="hud-value" id="move-count">0</span>
+      </div>
+      <div class="hud-sep" aria-hidden="true"></div>
+      <div class="hud-stat">
+        <span class="hud-label">Explored</span>
+        <span class="hud-value" id="visited-count">1</span>
+      </div>
+      <button type="button" id="reset-button" class="hud-reset" title="Start over">
+        Reset
+      </button>
+    </div>
 
-      <section class="hud" aria-label="Game statistics">
-        <article class="stat-card stat-moves">
-          <span class="stat-label">Moves</span>
-          <span class="stat-value" id="move-count">0</span>
-        </article>
-        <article class="stat-card stat-visited">
-          <span class="stat-label">Tiles explored</span>
-          <span class="stat-value" id="visited-count">1</span>
-        </article>
-        <article class="stat-card stat-pos">
-          <span class="stat-label">Position (q, r)</span>
-          <span class="stat-value" id="pos-value">0, 0</span>
-        </article>
-        <button type="button" id="reset-button" class="reset-button" title="Start over">
-          Reset
-        </button>
-      </section>
+    <p id="status" class="status" aria-live="polite">
+      Click a neighboring square to move your piece.
+    </p>
 
-      <section class="board-wrap">
-        <canvas id="board" width="720" height="640" aria-label="Hex world"></canvas>
-      </section>
-
-      <p id="status" class="status" aria-live="polite">
-        The world is quiet. Pick a tile and start exploring.
-      </p>
-    </main>
-
-    <script src="game-core.js?v=1"></script>
-    <script src="app.js?v=1"></script>
+    <script src="game-core.js?v=2"></script>
+    <script src="app.js?v=2"></script>
   </body>
 </html>

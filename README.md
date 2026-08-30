@@ -1,8 +1,9 @@
 # HexSplore
 
-A tiny browser game: a world built out of hexagon tiles. You control a glowing
-marker that starts on the center hex. **Click any neighboring hexagon to step
-onto it — every step counts as a move.**
+A tiny browser game played on a **full-screen grassy field of square tiles**.
+You control a **chess pawn** that starts in the center of the field. **Click any
+neighboring square — up, down, left, or right — to step onto it. Every step
+counts as a move.**
 
 Play it in the browser, no install required.
 
@@ -26,11 +27,11 @@ npm start      # serves the folder at http://localhost:3000
 ## Test
 
 ```bash
-npm test       # node --test — pure hex-grid + movement logic
+npm test       # node --test — pure grid + movement logic
 ```
 
-The test suite gates the deploy: if the KPF (Known-Property/Feature) tests fail,
-the site is not published.
+The test suite gates the deploy: if the KPF (Key Product Functionality) tests
+fail, the site is not published.
 
 ## How it's built
 
@@ -38,22 +39,25 @@ Pure static files — no build step, no framework.
 
 | File           | Role                                                                    |
 | -------------- | ----------------------------------------------------------------------- |
-| `game-core.js` | All game rules (hex math, board, legal moves, move counting). UMD so it runs in both the browser and Node's test runner. |
-| `app.js`       | Browser-only: canvas rendering, pixel↔hex conversion, click handling.   |
-| `index.html`   | Layout + HUD (moves, tiles explored, position).                         |
-| `style.css`    | Styling.                                                                |
+| `game-core.js` | All game rules (square-grid math, board, legal moves, move counting). UMD so it runs in both the browser and Node's test runner. |
+| `app.js`       | Browser-only: full-screen canvas rendering (grass tiles + chess pawn), pixel↔tile conversion, click handling. |
+| `index.html`   | Full-screen canvas + a minimal floating HUD (moves, tiles explored).    |
+| `style.css`    | Full-viewport layout and HUD styling.                                   |
 | `test/`        | `node --test` suite covering board generation, neighbor math, and movement rules. |
 
 ### Coordinate system
 
-Axial `(q, r)` coordinates on a **pointy-top** hex layout. The board is a
-hexagon of radius 3 (37 tiles). See
-[redblobgames.com/grids/hexagons](https://www.redblobgames.com/grids/hexagons/)
-for the reference math.
+Plain `(x, y)` grid coordinates on a rectangular field of **square** tiles
+(default **12 × 9 = 108 tiles**). Movement is orthogonal (4-connected): a tile's
+neighbors are the squares directly up, down, left, and right of it — no
+diagonals, just like a rook stepping one square.
+
+> The public game module is still exported as `window.HexCore` for backwards
+> compatibility with earlier markup; the world itself is now a square grid.
 
 ## Roadmap ideas
 
-- Terrain types / obstacles per tile
+- Terrain variety (dirt paths, water, trees) as impassable or costly tiles
 - Fog of war (reveal tiles as you explore)
 - Collectibles and a goal tile
-- Pathfinding preview / multi-step moves
+- More chess pieces with their own movement rules
