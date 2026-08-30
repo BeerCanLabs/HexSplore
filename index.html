@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>HexSplore</title>
-    <link rel="stylesheet" href="style.css?v=3" />
+    <link rel="stylesheet" href="style.css?v=4" />
   </head>
   <body>
     <canvas id="board"></canvas>
@@ -19,39 +19,12 @@
         <span class="hud-label">Explored</span>
         <span class="hud-value" id="visited-count">1</span>
       </div>
-      <div class="hud-item" id="hud-gems-container" style="display: none;">
-        <span class="hud-label">Gems</span>
-        <span class="hud-value" id="gems-count">0/4</span>
-      </div>
       <button type="button" id="reset-button" class="hud-reset" title="Start over">Reset</button>
-    </div>
-
-    <!-- Victory Overlay Screen -->
-    <div id="victory-overlay" class="victory-overlay" style="display: none;">
-      <div class="victory-card">
-        <h2>🎉 World Explored! 🎉</h2>
-        <p class="victory-text">You navigated the dense fog, bypassed the obstacles, and retrieved the Golden Treasure Chest!</p>
-        <div class="victory-stats">
-          <div class="v-stat">
-            <span class="v-label">Moves</span>
-            <span class="v-value" id="v-moves">0</span>
-          </div>
-          <div class="v-stat">
-            <span class="v-label">Gems Collected</span>
-            <span class="v-value" id="v-gems">0/4</span>
-          </div>
-          <div class="v-stat">
-            <span class="v-label">Area Explored</span>
-            <span class="v-value" id="v-explored">100%</span>
-          </div>
-        </div>
-        <button type="button" id="victory-reset-button" class="victory-btn">Generate New World</button>
-      </div>
     </div>
 
     <div id="status" class="status" aria-live="polite"></div>
 
-    <script src="game-core.js?v=3"></script>
-    <script src="app.js?v=3"></script>
+    <script src="game-core.js?v=4"></script>
+    <script src="app.js?v=4"></script>
   </body>
 </html>

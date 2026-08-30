@@ -19,10 +19,8 @@ keep passing on every commit (`npm test`, Node's built-in runner, no deps).
 | No self-move | Clicking the pawn's own square does not count as a move. | `the player cannot stand still (moving onto self is illegal)` |
 | Explored tiles | Tiles the pawn has stood on are remembered; revisiting still counts as a move but not a new visit. | `revisiting a tile still counts as a move but not a new visit` |
 | Pure state | `move()` returns a new state and never mutates the previous one. | `move() does not mutate the previous state` |
-| Solvable Maze | Rich Mode generates a layout where the Chest and all 4 Gems are reachable from the player start. | `rich mode layout is solvable and generated correctly` |
-| Impassable Obstacles | Obstacles and water blocks block movement. | `cannot move into obstacles or water` |
-| Gem Collection | Landing on a gem tile collects the gem and increments the gem count. | `collecting gems increases count and removes gem from board` |
-| Chest Victory | Reaching the chest tile triggers victory and finishes the world. | `reaching chest triggers victory` |
+| Mountain Terrain | Rich Mode generates a layout where some tiles are high, snowy peak mountains (impassable obstacles). | `rich mode layout has mountains generated correctly` |
+| Impassable Mountains | Snowy mountains block movement. | `cannot move into mountain obstacles` |
 | Fog of War | Tiles beyond a sight range of 2 Chebyshev distance start shrouded in fog and reveal as the player moves. | `fog of war reveals adjacent areas on move` |
 | Dynamic Expansion Left | Landing on the left-most boundary tile dynamically expands the board by 3 columns of new terrain to the left (negative coordinates). | `moving to left boundary expands board to left` |
 | Dynamic Expansion Right | Landing on the right-most boundary tile dynamically expands the board by 3 columns of new terrain to the right. | `moving to right boundary expands board to right` |
@@ -37,21 +35,32 @@ dependencies.
 ## UI note (the map is the game)
 
 The field fills the entire browser viewport — there is no page chrome or card
-shell. A small floating HUD (Moves / Explored / Gems / Reset) sits at the top and a
+shell. A small floating HUD (Moves / Explored / Reset) sits at the top and a
 status line at the bottom, both overlaid on the field.
 
-## UI note (grassy field)
+## UI note (grassy field & mountains)
 
 Every tile is drawn as grass on an HTML canvas: a subtle two-tone "mowed"
 checkerboard, per-tile color variation, scattered grass blades, and the
-occasional wildflower. Squares the pawn can step to are highlighted; visited
-tiles get a faint trampled tint.
+occasional wildflower. Impassable tiles are drawn as snowy peak vector mountains.
+Squares the pawn can step to are highlighted; visited tiles get a faint trampled tint.
+
+## UI note (floating clouds)
+
+Fog of War is drawn as puffy semi-transparent white/grey overlapping cloud circles,
+which drift off as tiles are explored.
 
 ## UI note (chess-piece player)
 
 The player is rendered as a classic **chess pawn** (ivory body, dark outline,
 rounded base, collar, and a sphere head) sitting on its tile with a soft
 shadow — not a plain marker.
+
+## UI note (click-and-drag camera)
+
+The camera does not follow the player's movement. You can click and drag (or drag
+with a touch finger) to pan the camera freely. Panning uses momentum and drag thresholds
+to distinguish between camera movements and steps.
 
 ## UI note (rendering)
 

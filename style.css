@@ -9,8 +9,9 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #2f5a29;
+  background: #11220e;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  user-select: none;
 }
 
 #board {
@@ -39,7 +40,6 @@ body {
   -webkit-backdrop-filter: blur(10px);
   color: #f2fbe9;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  user-select: none;
 }
 
 .hud-item {
@@ -113,114 +113,4 @@ body {
 
 .status.show {
   opacity: 1;
-}
-
-/* Victory Overlay - Full screen dark blur */
-.victory-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(5, 12, 4, 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  animation: fadeIn 0.4s ease forwards;
-}
-
-/* Victory Card */
-.victory-card {
-  background: rgba(18, 32, 16, 0.8);
-  border: 2px solid rgba(255, 215, 0, 0.4);
-  border-radius: 24px;
-  padding: 32px 40px;
-  max-width: 500px;
-  width: 90%;
-  text-align: center;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 40px rgba(218, 165, 32, 0.15);
-  color: #f2fbe9;
-  animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-.victory-card h2 {
-  font-size: 2.2rem;
-  font-weight: 800;
-  margin-bottom: 12px;
-  color: #ffd700;
-  text-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
-  letter-spacing: -0.01em;
-}
-
-.victory-text {
-  font-size: 0.98rem;
-  line-height: 1.5;
-  color: #d1e8c9;
-  margin-bottom: 24px;
-}
-
-/* Stats inside Victory Card */
-.victory-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-bottom: 32px;
-}
-
-.v-stat {
-  display: flex;
-  flex-direction: column;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 12px 6px;
-}
-
-.v-label {
-  font-size: 0.68rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #a4cca1;
-  margin-bottom: 4px;
-}
-
-.v-value {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: #ffffff;
-}
-
-/* Big Call to Action Button */
-.victory-btn {
-  width: 100%;
-  padding: 14px 28px;
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #0d1e0a;
-  background: linear-gradient(135deg, #ffe042, #ffd700);
-  border: none;
-  border-radius: 14px;
-  cursor: pointer;
-  box-shadow: 0 8px 20px rgba(255, 215, 0, 0.25);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
-}
-
-.victory-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(255, 215, 0, 0.4);
-  filter: brightness(1.05);
-}
-
-.victory-btn:active {
-  transform: translateY(0);
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes scaleIn {
-  from { transform: scale(0.9); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
 }

@@ -182,51 +182,16 @@ test("KPF: visiting new tiles grows the visited set", () => {
 
 // ── Rich Mode & Exploration Mechanics ───────────────────────────────────────────
 
-test("KPF: rich mode layout is solvable and generated correctly", () => {
+test("KPF: rich mode layout has mountains generated correctly", () => {
   const s = createState(12, 9, { richMode: true });
-  assert.equal(s.totalGems, 4);
-  assert.equal(s.gemsCollected, 0);
-  assert.equal(s.gems.length, 4);
-  assert.ok(s.chest !== null);
   assert.ok(s.obstacles.length > 0);
-  assert.ok(s.water.length > 0);
-  assert.equal(s.victory, false);
 });
 
-test("KPF: cannot move into obstacles or water", () => {
+test("KPF: cannot move into mountain obstacles", () => {
   const s = createState(12, 9);
-  // Add a manual obstacle
+  // Add a manual mountain obstacle
   s.obstacles.push(key(s.player.c + 1, s.player.r));
   assert.equal(canMoveTo(s, s.player.c + 1, s.player.r), false);
-  
-  // Add manual water
-  s.water.push(key(s.player.c, s.player.r + 1));
-  assert.equal(canMoveTo(s, s.player.c, s.player.r + 1), false);
-});
-
-test("KPF: collecting gems increases count and removes gem from board", () => {
-  let s = createState(12, 9);
-  const gemC = s.player.c + 1;
-  const gemR = s.player.r;
-  const gemKey = key(gemC, gemR);
-  s.gems = [gemKey];
-  s.totalGems = 1;
-  s.gemsCollected = 0;
-  
-  s = move(s, gemC, gemR);
-  assert.equal(s.gemsCollected, 1);
-  assert.equal(s.gems.length, 0);
-});
-
-test("KPF: reaching chest triggers victory", () => {
-  let s = createState(12, 9);
-  const chestC = s.player.c + 1;
-  const chestR = s.player.r;
-  s.chest = { c: chestC, r: chestR };
-  s.victory = false;
-  
-  s = move(s, chestC, chestR);
-  assert.equal(s.victory, true);
 });
 
 test("KPF: fog of war reveals adjacent areas on move", () => {
@@ -305,6 +270,3 @@ test("KPF: moving to bottom boundary expands board downward", () => {
   assert.equal(s.minRow, 0);
   assert.equal(s.rows, 12);
 });
-
-
-
