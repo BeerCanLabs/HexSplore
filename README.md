@@ -47,10 +47,10 @@ Pure static files — no build step, no framework.
 
 ### Coordinate system
 
-Plain `(x, y)` grid coordinates on a rectangular field of **square** tiles
-(default **12 × 9 = 108 tiles**). Movement is orthogonal (4-connected): a tile's
-neighbors are the squares directly up, down, left, and right of it — no
-diagonals, just like a rook stepping one square.
+Plain `(col, row)` grid coordinates on a rectangular field of **square** tiles
+(default **12 × 9 = 108 tiles**). Movement is 8-directional (orthogonal + diagonal):
+a tile's neighbors are the squares directly adjacent to it, just like a chess king.
+
 
 > The public game module is still exported as `window.HexCore` for backwards
 > compatibility with earlier markup; the world itself is now a square grid.

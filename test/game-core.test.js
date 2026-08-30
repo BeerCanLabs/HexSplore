@@ -178,3 +178,64 @@ test("KPF: visiting new tiles grows the visited set", () => {
   assert.equal(s.moves, 2);
   assert.equal(visitedCount(s), 3);
 });
+
+// ── Rich Mode & Exploration Mechanics ───────────────────────────────────────────
+
+test("KPF: rich mode layout is solvable and generated correctly", () => {
+  const s = createState(12, 9, { richMode: true });
+  assert.equal(s.totalGems, 4);
+  assert.equal(s.gemsCollected, 0);
+  assert.equal(s.gems.length, 4);
+  assert.ok(s.chest !== null);
+  assert.ok(s.obstacles.length > 0);
+  assert.ok(s.water.length > 0);
+  assert.equal(s.victory, false);
+});
+
+test("KPF: cannot move into obstacles or water", () => {
+  const s = createState(12, 9);
+  // Add a manual obstacle
+  s.obstacles.push(key(s.player.c + 1, s.player.r));
+  assert.equal(canMoveTo(s, s.player.c + 1, s.player.r), false);
+  
+  // Add manual water
+  s.water.push(key(s.player.c, s.player.r + 1));
+  assert.equal(canMoveTo(s, s.player.c, s.player.r + 1), false);
+});
+
+test("KPF: collecting gems increases count and removes gem from board", () => {
+  let s = createState(12, 9);
+  const gemC = s.player.c + 1;
+  const gemR = s.player.r;
+  const gemKey = key(gemC, gemR);
+  s.gems = [gemKey];
+  s.totalGems = 1;
+  s.gemsCollected = 0;
+  
+  s = move(s, gemC, gemR);
+  assert.equal(s.gemsCollected, 1);
+  assert.equal(s.gems.length, 0);
+});
+
+test("KPF: reaching chest triggers victory", () => {
+  let s = createState(12, 9);
+  const chestC = s.player.c + 1;
+  const chestR = s.player.r;
+  s.chest = { c: chestC, r: chestR };
+  s.victory = false;
+  
+  s = move(s, chestC, chestR);
+  assert.equal(s.victory, true);
+});
+
+test("KPF: fog of war reveals adjacent areas on move", () => {
+  let s = createState(12, 9);
+  s.revealed = [key(s.player.c, s.player.r)]; // Reset to just center
+  s = move(s, s.player.c + 1, s.player.r);
+  
+  // Chebyshev distance 2 means (c+2, r+2) should be revealed
+  const farKey = key(s.player.c + 1, s.player.r);
+  assert.ok(s.revealed.includes(farKey));
+  assert.ok(s.revealed.includes(key(s.player.c + 2, s.player.r + 2)));
+});
+

@@ -5,20 +5,25 @@ keep passing on every commit (`npm test`, Node's built-in runner, no deps).
 
 | KPF | Expected behavior | Automated coverage |
 | --- | --- | --- |
-| Square field | The world is a rectangular field of square tiles; the default field is 12×9 (108 tiles). | `default field is 12x9 with 108 tiles`, `board size equals width times height` |
-| Tiles are squares | Tiles are addressed by `(x, y)` and generated in row-major order. | `tiles are square coordinates in row-major order` |
+| Square field | The world is a rectangular field of square tiles; the default field is 12×9 (108 tiles). | `default field is 12x9 (108 tiles)`, `board size equals cols * rows` |
+| Tiles are squares | Tiles are addressed by `(col, row)` and generated in row-major order. | `every generated tile lies on the board` |
 | Center start | The player (a chess pawn) starts on the center tile of the field. | `the player starts on the center tile of the field` |
-| Fresh game | A new game has zero moves and one visited tile. | `a fresh game starts with zero moves and one visited tile` |
-| Four neighbors | An interior square has four neighbors (up, down, left, right). | `an interior tile has four neighbors` |
-| Board edges | Corner squares have two on-board neighbors; edge squares have three. | `a corner tile has exactly two on-board neighbors`, `an edge (non-corner) tile has three on-board neighbors` |
-| Click to move | Clicking a neighboring square moves the pawn onto it. | `the player may move to any orthogonal neighbor`, `moving to a neighbor increments the move counter` |
+| Fresh game | A new game has zero moves and one visited tile. | `a fresh game starts on the center with zero moves` |
+| Eight neighbors | An interior square has eight neighbors (orthogonal + diagonal). | `an interior tile has eight neighbors` |
+| Board edges | Corner squares have three on-board neighbors; edge squares have five. | `a corner tile has three on-board neighbors`, `an edge tile has five on-board neighbors` |
+| Click to move | Clicking a neighboring square moves the pawn onto it. | `the player may move to any of its eight neighbors` |
 | Move counter | Each legal move increases the move count by exactly one. | `moving to a neighbor increments the move counter` |
-| No diagonals | Diagonal squares are not neighbors and cannot be moved to. | `diagonal tiles are NOT neighbors`, `the player cannot move diagonally` |
+| Diagonals | Diagonal squares are direct neighbors and can be moved to, counting as one move. | `a diagonal move is legal and counts as one move` |
 | Only neighbors | Non-adjacent squares cannot be reached and never change game state. | `the player cannot teleport to a non-neighbor tile` |
-| Stay on the field | Moves off the edge of the field are rejected without mutation. | `the player cannot move off the edge of the field` |
+| Stay on the field | Moves off the edge of the field are rejected without mutation. | `the player cannot move off the edge of the board` |
 | No self-move | Clicking the pawn's own square does not count as a move. | `the player cannot stand still (moving onto self is illegal)` |
-| Explored tiles | Tiles the pawn has stood on are remembered; revisiting still counts as a move but not a new visit. | `visiting new tiles grows the visited set`, `revisiting a tile still counts as a move but not a new visit` |
+| Explored tiles | Tiles the pawn has stood on are remembered; revisiting still counts as a move but not a new visit. | `revisiting a tile still counts as a move but not a new visit` |
 | Pure state | `move()` returns a new state and never mutates the previous one. | `move() does not mutate the previous state` |
+| Solvable Maze | Rich Mode generates a layout where the Chest and all 4 Gems are reachable from the player start. | `rich mode layout is solvable and generated correctly` |
+| Impassable Obstacles | Obstacles and water blocks block movement. | `cannot move into obstacles or water` |
+| Gem Collection | Landing on a gem tile collects the gem and increments the gem count. | `collecting gems increases count and removes gem from board` |
+| Chest Victory | Reaching the chest tile triggers victory and finishes the world. | `reaching chest triggers victory` |
+| Fog of War | Tiles beyond a sight range of 2 Chebyshev distance start shrouded in fog and reveal as the player moves. | `fog of war reveals adjacent areas on move` |
 
 ## Test command
 
@@ -28,7 +33,7 @@ dependencies.
 ## UI note (the map is the game)
 
 The field fills the entire browser viewport — there is no page chrome or card
-shell. A small floating HUD (Moves / Explored / Reset) sits at the top and a
+shell. A small floating HUD (Moves / Explored / Gems / Reset) sits at the top and a
 status line at the bottom, both overlaid on the field.
 
 ## UI note (grassy field)

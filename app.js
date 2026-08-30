@@ -2,8 +2,11 @@
  * HexSplore — app.js
  *
  * Full-screen SQUARE-grid map. Browser-only layer: responsive canvas sizing,
- * procedural grassy-field tile rendering, a chess-piece (pawn) player, and
- * click-to-move. ALL game rules live in game-core.js (window.HexCore).
+ * procedural grassy-field tile rendering, vector trees/rocks obstacles, blue
+ * water ponds, gems collection, gold treasure chests, fog of war, and responsive
+ * click-to-move handling.
+ *
+ * ALL game rules live in game-core.js (window.HexCore).
  */
 (function () {
   "use strict";
@@ -14,13 +17,23 @@
 
   const moveCountEl = document.getElementById("move-count");
   const visitedCountEl = document.getElementById("visited-count");
+  const gemsCountEl = document.getElementById("gems-count");
+  const gemsContainerEl = document.getElementById("hud-gems-container");
   const statusEl = document.getElementById("status");
   const resetButton = document.getElementById("reset-button");
+
+  // Victory Overlay Elements
+  const victoryOverlay = document.getElementById("victory-overlay");
+  const vMovesEl = document.getElementById("v-moves");
+  const vGemsEl = document.getElementById("v-gems");
+  const vExploredEl = document.getElementById("v-explored");
+  const victoryResetBtn = document.getElementById("victory-reset-button");
 
   const COLS = Core.DEFAULT_COLS; // 12
   const ROWS = Core.DEFAULT_ROWS; // 9
 
-  let state = Core.createState(COLS, ROWS);
+  // Start with rich Mode enabled so the game is incredibly engaging!
+  let state = Core.createState(COLS, ROWS, { richMode: true });
   let hoverKey = null;
 
   // Layout computed on every resize: tile size + board origin so the grid is
@@ -82,52 +95,336 @@
     return { c, r };
   }
 
-  // ── Grassy field rendering ──────────────────────────────────────────────────
+  // ── Rich tile rendering with terrain & Fog of War ──────────────────────────
 
-  function drawGrassTile(x, y, size, c, r, opts) {
+  function drawTile(x, y, size, c, r, opts) {
     const rand = rngFor(c, r);
-    // Base grass color varies subtly per tile for a natural, patchy field.
-    const checker = (c + r) % 2 === 0;
-    const baseH = 100 + Math.floor(rand() * 18); // green hues
-    const baseS = 42 + Math.floor(rand() * 12);
-    const baseL = (checker ? 30 : 27) + Math.floor(rand() * 6);
-    ctx.fillStyle = `hsl(${baseH}, ${baseS}%, ${baseL}%)`;
-    ctx.fillRect(x, y, size, size);
+    const k = Core.key(c, r);
 
-    // A soft darker patch or two for texture.
-    const patches = 1 + Math.floor(rand() * 2);
-    for (let i = 0; i < patches; i++) {
-      const px = x + rand() * size;
-      const py = y + rand() * size;
-      const pr = size * (0.12 + rand() * 0.16);
-      const g = ctx.createRadialGradient(px, py, 0, px, py, pr);
-      g.addColorStop(0, `hsla(${baseH}, ${baseS}%, ${baseL - 8}%, 0.5)`);
-      g.addColorStop(1, "hsla(0,0%,0%,0)");
-      ctx.fillStyle = g;
+    // 1. If NOT revealed, draw Fog of War
+    if (state.revealed && !state.revealed.includes(k)) {
+      ctx.fillStyle = "#161c22"; // mysterious dark grey
+      ctx.fillRect(x, y, size, size);
+
+      // Render misty rolling clouds
+      ctx.fillStyle = "rgba(255, 255, 255, 0.02)";
       ctx.beginPath();
-      ctx.arc(px, py, pr, 0, Math.PI * 2);
+      ctx.arc(x + size * 0.4, y + size * 0.4, size * 0.22, 0, Math.PI * 2);
+      ctx.arc(x + size * 0.6, y + size * 0.5, size * 0.26, 0, Math.PI * 2);
       ctx.fill();
+
+      // Subtle tile border inside fog
+      ctx.strokeStyle = "rgba(255,255,255,0.03)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+      return;
     }
 
-    // Grass blades: little upward strokes scattered across the tile.
-    const blades = Math.floor(size / 7) + Math.floor(rand() * 4);
-    ctx.lineWidth = Math.max(1, size * 0.02);
-    ctx.lineCap = "round";
-    for (let i = 0; i < blades; i++) {
-      const bx = x + 4 + rand() * (size - 8);
-      const by = y + 6 + rand() * (size - 8);
-      const hgt = size * (0.08 + rand() * 0.12);
-      const lean = (rand() - 0.5) * size * 0.06;
-      const shade = 34 + Math.floor(rand() * 22);
-      ctx.strokeStyle = `hsl(${baseH + 4}, ${baseS + 8}%, ${shade}%)`;
+    // 2. Tile is revealed! Determine its base terrain:
+    const isObstacle = state.obstacles && state.obstacles.includes(k);
+    const isWater = state.water && state.water.includes(k);
+
+    if (isWater) {
+      // Draw blue water pond
+      const baseH = 200 + Math.floor(rand() * 10); // blue/cyan
+      const baseS = 65 + Math.floor(rand() * 15);
+      const baseL = 33 + Math.floor(rand() * 8);
+      ctx.fillStyle = `hsl(${baseH}, ${baseS}%, ${baseL}%)`;
+      ctx.fillRect(x, y, size, size);
+
+      // Draw soft water ripple waves
+      ctx.strokeStyle = `hsla(${baseH}, ${baseS}%, ${baseL + 15}%, 0.4)`;
+      ctx.lineWidth = Math.max(1.5, size * 0.02);
+      ctx.lineCap = "round";
+      
+      const ripples = 2;
+      for (let i = 0; i < ripples; i++) {
+        const rx = x + size * 0.15 + rand() * (size * 0.4);
+        const ry = y + size * 0.15 + rand() * (size * 0.4);
+        const rw = size * 0.15 + rand() * (size * 0.12);
+        
+        ctx.beginPath();
+        ctx.arc(rx, ry, rw, Math.PI * 0.2, Math.PI * 0.8);
+        ctx.stroke();
+      }
+
+    } else {
+      // Grass (normal walkable terrain or tree/rock base)
+      const checker = (c + r) % 2 === 0;
+      const baseH = 100 + Math.floor(rand() * 18); // green hues
+      const baseS = 42 + Math.floor(rand() * 12);
+      const baseL = (checker ? 30 : 27) + Math.floor(rand() * 6);
+      ctx.fillStyle = `hsl(${baseH}, ${baseS}%, ${baseL}%)`;
+      ctx.fillRect(x, y, size, size);
+
+      // Draw darker texture patches
+      const patches = 1 + Math.floor(rand() * 2);
+      for (let i = 0; i < patches; i++) {
+        const px = x + rand() * size;
+        const py = y + rand() * size;
+        const pr = size * (0.12 + rand() * 0.16);
+        const g = ctx.createRadialGradient(px, py, 0, px, py, pr);
+        g.addColorStop(0, `hsla(${baseH}, ${baseS}%, ${baseL - 8}%, 0.5)`);
+        g.addColorStop(1, "hsla(0,0%,0%,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(px, py, pr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Scatter grass blades
+      const blades = Math.floor(size / 8) + Math.floor(rand() * 4);
+      ctx.lineWidth = Math.max(1, size * 0.015);
+      ctx.lineCap = "round";
+      for (let i = 0; i < blades; i++) {
+        const bx = x + 4 + rand() * (size - 8);
+        const by = y + 6 + rand() * (size - 8);
+        const hgt = size * (0.07 + rand() * 0.1);
+        const lean = (rand() - 0.5) * size * 0.05;
+        const shade = 35 + Math.floor(rand() * 20);
+        ctx.strokeStyle = `hsl(${baseH + 4}, ${baseS + 8}%, ${shade}%)`;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.quadraticCurveTo(bx + lean * 0.5, by - hgt * 0.6, bx + lean, by - hgt);
+        ctx.stroke();
+      }
+
+      // Draw a wildflower occasionally!
+      if (rand() < 0.08) {
+        const fx = x + size * 0.25 + rand() * (size * 0.5);
+        const fy = y + size * 0.25 + rand() * (size * 0.5);
+        const fr = size * 0.04;
+        
+        // Flower stem
+        ctx.strokeStyle = "#4d7c0f";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(fx, fy);
+        ctx.lineTo(fx, fy + size * 0.12);
+        ctx.stroke();
+
+        // Petals
+        ctx.fillStyle = rand() < 0.5 ? "#facc15" : "#f472b6"; // yellow or pink
+        ctx.beginPath();
+        ctx.arc(fx - fr, fy, fr, 0, Math.PI * 2);
+        ctx.arc(fx + fr, fy, fr, 0, Math.PI * 2);
+        ctx.arc(fx, fy - fr, fr, 0, Math.PI * 2);
+        ctx.arc(fx, fy + fr, fr, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Center
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(fx, fy, fr * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 3. Draw vector tree or rock inside obstacles
+    if (isObstacle) {
+      const px = x + size / 2;
+      const py = y + size * 0.85;
+      
+      if (rand() < 0.5) {
+        // Draw Pine Tree
+        ctx.save();
+        // Shadow
+        ctx.fillStyle = "rgba(0,0,0,0.22)";
+        ctx.beginPath();
+        ctx.ellipse(px, py, size * 0.22, size * 0.08, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Trunk
+        ctx.fillStyle = "#713f12";
+        ctx.fillRect(px - size * 0.05, py - size * 0.2, size * 0.1, size * 0.2);
+
+        // Pine branches (3 layered triangles)
+        ctx.fillStyle = "#14532d";
+        
+        // Bottom triangle
+        ctx.beginPath();
+        ctx.moveTo(px - size * 0.28, py - size * 0.18);
+        ctx.lineTo(px + size * 0.28, py - size * 0.18);
+        ctx.lineTo(px, py - size * 0.45);
+        ctx.closePath();
+        ctx.fill();
+
+        // Middle triangle
+        ctx.fillStyle = "#15803d";
+        ctx.beginPath();
+        ctx.moveTo(px - size * 0.22, py - size * 0.35);
+        ctx.lineTo(px + size * 0.22, py - size * 0.35);
+        ctx.lineTo(px, py - size * 0.60);
+        ctx.closePath();
+        ctx.fill();
+
+        // Top triangle
+        ctx.fillStyle = "#22c55e";
+        ctx.beginPath();
+        ctx.moveTo(px - size * 0.15, py - size * 0.50);
+        ctx.lineTo(px + size * 0.15, py - size * 0.50);
+        ctx.lineTo(px, py - size * 0.72);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+      } else {
+        // Draw Rock Boulder
+        ctx.save();
+        // Shadow
+        ctx.fillStyle = "rgba(0,0,0,0.22)";
+        ctx.beginPath();
+        ctx.ellipse(px, py, size * 0.26, size * 0.1, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Boulders (two overlapping rocks)
+        // Rock 1 (main)
+        ctx.fillStyle = "#4b5563";
+        ctx.beginPath();
+        ctx.moveTo(px - size * 0.22, py);
+        ctx.quadraticCurveTo(px - size * 0.24, py - size * 0.34, px, py - size * 0.36);
+        ctx.quadraticCurveTo(px + size * 0.22, py - size * 0.34, px + size * 0.2, py);
+        ctx.closePath();
+        ctx.fill();
+
+        // Rock 1 Highlight
+        ctx.strokeStyle = "#9ca3af";
+        ctx.lineWidth = Math.max(1, size * 0.015);
+        ctx.beginPath();
+        ctx.moveTo(px - size * 0.14, py - size * 0.14);
+        ctx.quadraticCurveTo(px - size * 0.12, py - size * 0.3, px, py - size * 0.32);
+        ctx.stroke();
+
+        // Rock 2 (smaller overlapping side rock)
+        ctx.fillStyle = "#374151";
+        ctx.beginPath();
+        ctx.moveTo(px + size * 0.05, py);
+        ctx.quadraticCurveTo(px + size * 0.02, py - size * 0.22, px + size * 0.18, py - size * 0.24);
+        ctx.quadraticCurveTo(px + size * 0.32, py - size * 0.2, px + size * 0.28, py);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // 4. Draw Collectibles (Gems)
+    const hasGem = state.gems && state.gems.includes(k);
+    if (hasGem) {
+      ctx.save();
+      const cx = x + size / 2;
+      const cy = y + size * 0.45;
+      
+      // Shadow
+      ctx.fillStyle = "rgba(0,0,0,0.18)";
       ctx.beginPath();
-      ctx.moveTo(bx, by);
-      ctx.quadraticCurveTo(bx + lean * 0.5, by - hgt * 0.6, bx + lean, by - hgt);
+      ctx.ellipse(cx, cy + size * 0.25, size * 0.12, size * 0.04, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Gem shape (Diamond)
+      const w = size * 0.12;
+      const h = size * 0.18;
+      
+      const gGrad = ctx.createLinearGradient(cx - w, cy - h, cx + w, cy + h);
+      gGrad.addColorStop(0, "#fb7185"); // hot pink/rose gradient
+      gGrad.addColorStop(0.5, "#ec4899");
+      gGrad.addColorStop(1, "#be185d");
+
+      ctx.fillStyle = gGrad;
+      ctx.strokeStyle = "#9d174d";
+      ctx.lineWidth = Math.max(1, size * 0.015);
+      
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - h); // top
+      ctx.lineTo(cx + w, cy); // right
+      ctx.lineTo(cx, cy + h); // bottom
+      ctx.lineTo(cx - w, cy); // left
+      ctx.closePath();
+      ctx.fill();
       ctx.stroke();
+
+      // Facet reflection highlights
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - h);
+      ctx.lineTo(cx + w * 0.4, cy);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx - w * 0.4, cy);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // 5. Draw Chest (Goal)
+    const isChest = state.chest && state.chest.c === c && state.chest.r === r;
+    if (isChest) {
+      ctx.save();
+      const cx = x + size / 2;
+      const cy = y + size * 0.5;
+
+      // Golden glow behind chest
+      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 0.45);
+      glow.addColorStop(0, "rgba(234, 179, 8, 0.4)");
+      glow.addColorStop(1, "rgba(234, 179, 8, 0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(cx, cy, size * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Shadow
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + size * 0.22, size * 0.24, size * 0.08, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Chest Body (Wood/Golden Chest)
+      const cw = size * 0.42;
+      const ch = size * 0.32;
+      const bx = cx - cw / 2;
+      const by = cy - ch / 2 + size * 0.08;
+
+      // Base Box (Brown)
+      ctx.fillStyle = "#78350f"; // wood brown
+      ctx.strokeStyle = "#451a03";
+      ctx.lineWidth = Math.max(1.5, size * 0.02);
+      ctx.fillRect(bx, by, cw, ch);
+      ctx.strokeRect(bx, by, cw, ch);
+
+      // Rounded Lid
+      const lidH = size * 0.15;
+      const lx = bx;
+      const ly = by - lidH;
+
+      ctx.fillStyle = "#92400e";
+      ctx.beginPath();
+      ctx.moveTo(lx, ly + lidH);
+      ctx.quadraticCurveTo(lx + cw * 0.1, ly, lx + cw / 2, ly);
+      ctx.quadraticCurveTo(lx + cw * 0.9, ly, lx + cw, ly + lidH);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Gold Trim bands on sides
+      ctx.fillStyle = "#eab308"; // Gold
+      ctx.fillRect(lx + size * 0.04, ly + lidH * 0.2, size * 0.04, lidH * 0.8 + ch);
+      ctx.fillRect(lx + cw - size * 0.08, ly + lidH * 0.2, size * 0.04, lidH * 0.8 + ch);
+
+      // Gold Lock Plate
+      ctx.fillStyle = "#ca8a04";
+      ctx.fillRect(cx - size * 0.05, by - size * 0.03, size * 0.1, size * 0.12);
+      ctx.strokeRect(cx - size * 0.05, by - size * 0.03, size * 0.1, size * 0.12);
+
+      // Silver Keyhole dot
+      ctx.fillStyle = "#1e293b";
+      ctx.beginPath();
+      ctx.arc(cx, by + size * 0.03, size * 0.02, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
     }
 
     // Subtle tile grid line.
-    ctx.strokeStyle = "rgba(0,0,0,0.16)";
+    ctx.strokeStyle = "rgba(0,0,0,0.14)";
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
 
@@ -140,7 +437,7 @@
       ctx.strokeRect(x + 1.5, y + 1.5, size - 3, size - 3);
     } else if (opts.visited && !opts.player) {
       // A faint worn trail on tiles you've already walked.
-      ctx.fillStyle = "rgba(70,45,20,0.12)";
+      ctx.fillStyle = "rgba(70,45,20,0.10)";
       ctx.fillRect(x, y, size, size);
     }
   }
@@ -227,7 +524,7 @@
 
   function draw() {
     // Fill the whole viewport (a border of field color around the grid).
-    ctx.fillStyle = "#274d22";
+    ctx.fillStyle = "#1e3d1a"; // dark forest moss background
     ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
     const size = layout.tile;
@@ -236,8 +533,15 @@
     for (const tile of Core.generateBoard(COLS, ROWS)) {
       const { x, y } = tilePixel(tile.c, tile.r);
       const k = Core.key(tile.c, tile.r);
-      drawGrassTile(x, y, size, tile.c, tile.r, {
-        reachable: Core.canMoveTo(state, tile.c, tile.r),
+      
+      // Determine if reachable
+      const reachable = Core.canMoveTo(state, tile.c, tile.r);
+      
+      // Reachable indicator only visible if revealed
+      const isReachableAndRevealed = reachable && (state.revealed && state.revealed.includes(k));
+
+      drawTile(x, y, size, tile.c, tile.r, {
+        reachable: isReachableAndRevealed,
         hover: k === hoverKey,
         visited: state.visited.includes(k),
         player: k === playerKey,
@@ -264,19 +568,70 @@
     statusTimer = setTimeout(() => statusEl.classList.remove("show"), 1800);
   }
 
+  function syncHUD() {
+    moveCountEl.textContent = String(state.moves);
+    visitedCountEl.textContent = String(Core.visitedCount(state));
+    
+    // Gems counter sync
+    if (state.totalGems > 0) {
+      gemsContainerEl.style.display = "flex";
+      gemsCountEl.textContent = `${state.gemsCollected}/${state.totalGems}`;
+    } else {
+      gemsContainerEl.style.display = "none";
+    }
+
+    // Handle Victory screen popup
+    if (state.victory) {
+      vMovesEl.textContent = String(state.moves);
+      vGemsEl.textContent = `${state.gemsCollected}/${state.totalGems}`;
+      
+      // Percent explored calculation
+      const totalTiles = COLS * ROWS;
+      const exploredCount = state.visited.length;
+      const percentExplored = Math.round((exploredCount / totalTiles) * 100);
+      vExploredEl.textContent = `${percentExplored}%`;
+
+      victoryOverlay.style.display = "flex";
+    } else {
+      victoryOverlay.style.display = "none";
+    }
+  }
+
   function handleClick(px, py) {
+    if (state.victory) return; // Block input on victory
+
     const t = pixelToTile(px, py);
     if (t.c === state.player.c && t.r === state.player.r) return;
     if (!Core.isOnBoard(t.c, t.r, COLS, ROWS)) return;
-    if (!Core.canMoveTo(state, t.c, t.r)) {
-      setStatus("Only one tile at a time — pick an adjacent square.");
+
+    const k = Core.key(t.c, t.r);
+    
+    // Safety: ensure it is revealed and reachable
+    const isRevealed = state.revealed && state.revealed.includes(k);
+    if (!isRevealed) {
+      setStatus("Can't step blindly into deep fog!");
       return;
     }
+
+    if (!Core.canMoveTo(state, t.c, t.r)) {
+      setStatus("Path is blocked or too far!");
+      return;
+    }
+
+    const previousGems = state.gemsCollected;
     state = Core.move(state, t.c, t.r);
-    moveCountEl.textContent = String(state.moves);
-    visitedCountEl.textContent = String(Core.visitedCount(state));
+    
+    // Feedback for gems collection
+    if (state.gemsCollected > previousGems) {
+      setStatus(`💎 Collected a sparkling ruby! (${state.gemsCollected}/${state.totalGems})`);
+    } else if (state.victory) {
+      setStatus("👑 Found the Golden Chest! Victory!");
+    } else {
+      setStatus(`Move ${state.moves}`);
+    }
+
+    syncHUD();
     draw();
-    setStatus(`Move ${state.moves}`);
   }
 
   canvas.addEventListener("click", (evt) => {
@@ -285,15 +640,21 @@
   });
 
   canvas.addEventListener("mousemove", (evt) => {
+    if (state.victory) return;
+
     const p = eventPixel(evt);
     const t = pixelToTile(p.x, p.y);
-    const k =
-      Core.isOnBoard(t.c, t.r, COLS, ROWS) && Core.canMoveTo(state, t.c, t.r)
-        ? Core.key(t.c, t.r)
-        : null;
-    if (k !== hoverKey) {
-      hoverKey = k;
-      canvas.style.cursor = k ? "pointer" : "default";
+    const k = Core.key(t.c, t.r);
+    
+    // Hover ONLY works on revealed, reachable tiles
+    const isHoverValid = Core.isOnBoard(t.c, t.r, COLS, ROWS) && 
+                         Core.canMoveTo(state, t.c, t.r) &&
+                         (state.revealed && state.revealed.includes(k));
+
+    const hoverVal = isHoverValid ? k : null;
+    if (hoverVal !== hoverKey) {
+      hoverKey = hoverVal;
+      canvas.style.cursor = hoverVal ? "pointer" : "default";
       draw();
     }
   });
@@ -305,17 +666,20 @@
     }
   });
 
-  resetButton.addEventListener("click", () => {
-    state = Core.createState(COLS, ROWS);
+  function startNewGame() {
+    state = Core.createState(COLS, ROWS, { richMode: true });
     hoverKey = null;
-    moveCountEl.textContent = "0";
-    visitedCountEl.textContent = "1";
+    syncHUD();
     draw();
-    setStatus("Field reset");
-  });
+    setStatus("Mysterious new world generated");
+  }
+
+  resetButton.addEventListener("click", startNewGame);
+  victoryResetBtn.addEventListener("click", startNewGame);
 
   window.addEventListener("resize", resize);
 
   // ── Boot ─────────────────────────────────────────────────────────────────────
+  syncHUD();
   resize();
 })();
