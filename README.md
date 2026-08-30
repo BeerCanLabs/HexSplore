@@ -8,8 +8,13 @@ Play it in the browser, no install required.
 
 ## Live
 
-Deployed automatically to GitHub Pages on every push to `main`:
+Served from GitHub Pages (branch-deploy from `main`, repo root):
 **https://bestdax.github.io/HexSplore/**
+
+> Note: an Actions-based `deploy.yml` (with a pre-deploy test gate) is the
+> intended CI. It couldn't be committed because the current token lacks the
+> `workflow` scope, so Pages is configured in classic branch-deploy mode for
+> now. Run `npm test` locally before pushing.
 
 ## Run locally
 
