@@ -1,0 +1,9 @@
+{
+  "name": "hexsplore",
+  "private": true,
+  "description": "A browser hex-grid explorer. Click a neighboring tile to move; every step counts.",
+  "scripts": {
+    "start": "npx serve .",
+    "test": "node --test"
+  }
+}
