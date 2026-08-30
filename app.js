@@ -1,10 +1,9 @@
 /*
  * HexSplore — app.js
  *
- * Browser-only layer: full-screen canvas rendering of a grassy square field,
- * pixel<->tile conversion, and click handling. ALL game rules (what a legal
- * move is, how moves are counted) live in game-core.js (window.HexCore). This
- * file just draws the state and forwards clicks into HexCore.move().
+ * Full-screen SQUARE-grid map. Browser-only layer: responsive canvas sizing,
+ * procedural grassy-field tile rendering, a chess-piece (pawn) player, and
+ * click-to-move. ALL game rules live in game-core.js (window.HexCore).
  */
 (function () {
   "use strict";
@@ -18,293 +17,283 @@
   const statusEl = document.getElementById("status");
   const resetButton = document.getElementById("reset-button");
 
-  const COLS = Core.DEFAULT_WIDTH;
-  const ROWS = Core.DEFAULT_HEIGHT;
+  const COLS = Core.DEFAULT_COLS; // 12
+  const ROWS = Core.DEFAULT_ROWS; // 9
 
   let state = Core.createState(COLS, ROWS);
-  let hoverKey = null; // key of the reachable tile under the cursor
+  let hoverKey = null;
 
-  // Layout, recomputed on every resize. `tile` is the square edge length in CSS
-  // px; the whole board is centered in the viewport with the field filling as
-  // much of the screen as it can while keeping tiles square.
-  let layout = { tile: 64, originX: 0, originY: 0, dpr: 1 };
+  // Layout computed on every resize: tile size + board origin so the grid is
+  // centered and fills as much of the viewport as possible.
+  let layout = { tile: 64, originX: 0, originY: 0, w: 0, h: 0 };
 
-  // Deterministic pseudo-random in [0,1) from integer tile coords, so each
-  // grass tile looks consistent across redraws (no shimmering).
-  function rand(x, y, salt) {
-    const n = Math.sin(x * 127.1 + y * 311.7 + salt * 74.7) * 43758.5453;
-    return n - Math.floor(n);
+  // Per-tile deterministic RNG seed so grass tufts stay stable across redraws.
+  function tileSeed(c, r) {
+    let h = (c * 73856093) ^ (r * 19349663);
+    h = (h ^ (h >>> 13)) * 1274126177;
+    return (h ^ (h >>> 16)) >>> 0;
+  }
+  // Tiny deterministic PRNG (mulberry32) seeded per tile.
+  function rngFor(c, r) {
+    let a = tileSeed(c, r);
+    return function () {
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
   }
 
-  // ── Sizing ─────────────────────────────────────────────────────────────────
+  // ── Responsive sizing ─────────────────────────────────────────────────────
 
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = window.devicePixelRatio || 1;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    // Largest square tile that lets the whole field fit on screen.
-    const tile = Math.floor(Math.min(vw / COLS, vh / ROWS));
-    const boardW = tile * COLS;
-    const boardH = tile * ROWS;
-
-    layout = {
-      tile,
-      originX: Math.floor((vw - boardW) / 2),
-      originY: Math.floor((vh - boardH) / 2),
-      dpr,
-    };
-
     canvas.width = Math.floor(vw * dpr);
     canvas.height = Math.floor(vh * dpr);
-    canvas.style.width = vw + "px";
-    canvas.style.height = vh + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+    // Largest square tile that fits the whole grid in the viewport.
+    const tile = Math.floor(Math.min(vw / COLS, vh / ROWS));
+    const w = tile * COLS;
+    const h = tile * ROWS;
+    layout = {
+      tile,
+      w,
+      h,
+      originX: Math.floor((vw - w) / 2),
+      originY: Math.floor((vh - h) / 2),
+    };
     draw();
   }
 
-  // Tile (x, y) -> top-left pixel of its square.
-  function tileToPixel(x, y) {
-    return {
-      px: layout.originX + x * layout.tile,
-      py: layout.originY + y * layout.tile,
-    };
+  // Tile top-left pixel.
+  function tilePixel(c, r) {
+    return { x: layout.originX + c * layout.tile, y: layout.originY + r * layout.tile };
   }
 
-  // Pixel -> tile coords (may be off-board; caller validates).
-  function pixelToTile(px, py) {
-    return {
-      x: Math.floor((px - layout.originX) / layout.tile),
-      y: Math.floor((py - layout.originY) / layout.tile),
-    };
+  // Convert a viewport pixel to a grid coordinate (may be off-board).
+  function pixelToTile(x, y) {
+    const c = Math.floor((x - layout.originX) / layout.tile);
+    const r = Math.floor((y - layout.originY) / layout.tile);
+    return { c, r };
   }
 
-  // ── Grass tile ───────────────────────────────────────────────────────────────
+  // ── Grassy field rendering ──────────────────────────────────────────────────
 
-  function drawGrassTile(px, py, size, x, y, opts) {
-    // Base grass color: a checkerboard "mowed" pattern plus per-tile variation.
-    const mow = (x + y) % 2 === 0;
-    const baseL = mow ? 46 : 40; // lightness for the two mow stripes
-    const vary = Math.floor(rand(x, y, 1) * 7) - 3;
-    const hue = 96 + Math.floor(rand(x, y, 2) * 12) - 6; // greens around 90-102
-    ctx.fillStyle = `hsl(${hue}, 46%, ${baseL + vary}%)`;
-    ctx.fillRect(px, py, size, size);
+  function drawGrassTile(x, y, size, c, r, opts) {
+    const rand = rngFor(c, r);
+    // Base grass color varies subtly per tile for a natural, patchy field.
+    const checker = (c + r) % 2 === 0;
+    const baseH = 100 + Math.floor(rand() * 18); // green hues
+    const baseS = 42 + Math.floor(rand() * 12);
+    const baseL = (checker ? 30 : 27) + Math.floor(rand() * 6);
+    ctx.fillStyle = `hsl(${baseH}, ${baseS}%, ${baseL}%)`;
+    ctx.fillRect(x, y, size, size);
 
-    // Soft vertical gradient sheen for a little depth.
-    const grad = ctx.createLinearGradient(px, py, px, py + size);
-    grad.addColorStop(0, "rgba(255,255,255,0.05)");
-    grad.addColorStop(1, "rgba(0,0,0,0.06)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(px, py, size, size);
-
-    // Scattered grass blades: a handful of short darker/lighter strokes.
-    const blades = 6 + Math.floor(rand(x, y, 3) * 4);
-    ctx.lineWidth = Math.max(1, size * 0.02);
-    ctx.lineCap = "round";
-    for (let i = 0; i < blades; i++) {
-      const bx = px + rand(x, y, 10 + i) * size;
-      const by = py + size * (0.55 + rand(x, y, 20 + i) * 0.4);
-      const h = size * (0.1 + rand(x, y, 30 + i) * 0.14);
-      const lean = (rand(x, y, 40 + i) - 0.5) * size * 0.12;
-      const dark = rand(x, y, 50 + i) > 0.5;
-      ctx.strokeStyle = dark
-        ? "rgba(24, 58, 20, 0.5)"
-        : "rgba(150, 205, 110, 0.55)";
+    // A soft darker patch or two for texture.
+    const patches = 1 + Math.floor(rand() * 2);
+    for (let i = 0; i < patches; i++) {
+      const px = x + rand() * size;
+      const py = y + rand() * size;
+      const pr = size * (0.12 + rand() * 0.16);
+      const g = ctx.createRadialGradient(px, py, 0, px, py, pr);
+      g.addColorStop(0, `hsla(${baseH}, ${baseS}%, ${baseL - 8}%, 0.5)`);
+      g.addColorStop(1, "hsla(0,0%,0%,0)");
+      ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.moveTo(bx, by);
-      ctx.lineTo(bx + lean, by - h);
-      ctx.stroke();
-    }
-
-    // Occasional tiny wildflower for charm.
-    if (rand(x, y, 7) > 0.9) {
-      const fx = px + (0.25 + rand(x, y, 8) * 0.5) * size;
-      const fy = py + (0.25 + rand(x, y, 9) * 0.5) * size;
-      ctx.fillStyle = rand(x, y, 11) > 0.5 ? "#f7e463" : "#f2f2f2";
-      ctx.beginPath();
-      ctx.arc(fx, fy, Math.max(1.2, size * 0.035), 0, Math.PI * 2);
+      ctx.arc(px, py, pr, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // State overlays -----------------------------------------------------------
-    if (opts.visited && !opts.isPlayer) {
-      // A gentle worn/trampled path tint on tiles already walked.
-      ctx.fillStyle = "rgba(70, 50, 25, 0.16)";
-      ctx.fillRect(px, py, size, size);
-    }
-    if (opts.reachable) {
-      // Highlight the squares the player can step to.
-      ctx.fillStyle = opts.hover
-        ? "rgba(255, 244, 170, 0.34)"
-        : "rgba(255, 255, 210, 0.16)";
-      ctx.fillRect(px, py, size, size);
-      ctx.strokeStyle = opts.hover
-        ? "rgba(255, 248, 190, 0.95)"
-        : "rgba(255, 250, 205, 0.55)";
-      ctx.lineWidth = Math.max(2, size * 0.04);
-      ctx.strokeRect(px + 1, py + 1, size - 2, size - 2);
+    // Grass blades: little upward strokes scattered across the tile.
+    const blades = Math.floor(size / 7) + Math.floor(rand() * 4);
+    ctx.lineWidth = Math.max(1, size * 0.02);
+    ctx.lineCap = "round";
+    for (let i = 0; i < blades; i++) {
+      const bx = x + 4 + rand() * (size - 8);
+      const by = y + 6 + rand() * (size - 8);
+      const hgt = size * (0.08 + rand() * 0.12);
+      const lean = (rand() - 0.5) * size * 0.06;
+      const shade = 34 + Math.floor(rand() * 22);
+      ctx.strokeStyle = `hsl(${baseH + 4}, ${baseS + 8}%, ${shade}%)`;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.quadraticCurveTo(bx + lean * 0.5, by - hgt * 0.6, bx + lean, by - hgt);
+      ctx.stroke();
     }
 
-    // Subtle tile seam so the grid of squares reads clearly.
-    ctx.strokeStyle = "rgba(20, 40, 16, 0.28)";
+    // Subtle tile grid line.
+    ctx.strokeStyle = "rgba(0,0,0,0.16)";
     ctx.lineWidth = 1;
-    ctx.strokeRect(px + 0.5, py + 0.5, size - 1, size - 1);
+    ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+
+    // Highlight reachable neighbor tiles and hover.
+    if (opts.reachable) {
+      ctx.fillStyle = opts.hover ? "rgba(255,255,120,0.28)" : "rgba(255,255,180,0.14)";
+      ctx.fillRect(x, y, size, size);
+      ctx.strokeStyle = opts.hover ? "rgba(255,255,150,0.95)" : "rgba(255,255,180,0.55)";
+      ctx.lineWidth = Math.max(2, size * 0.03);
+      ctx.strokeRect(x + 1.5, y + 1.5, size - 3, size - 3);
+    } else if (opts.visited && !opts.player) {
+      // A faint worn trail on tiles you've already walked.
+      ctx.fillStyle = "rgba(70,45,20,0.12)";
+      ctx.fillRect(x, y, size, size);
+    }
   }
 
-  // ── Chess-piece player (a pawn) ──────────────────────────────────────────────
+  // ── Chess-piece (pawn) player ──────────────────────────────────────────────
 
   function drawPawn(cx, baseY, size) {
-    // Proportions relative to tile size; drawn centered on cx, sitting on baseY.
-    const s = size;
-    const headR = s * 0.13;
-    const headCy = baseY - s * 0.62;
-    const neckW = s * 0.12;
-    const collarY = headCy + headR + s * 0.02;
-    const bodyTopY = collarY + s * 0.06;
-    const baseW = s * 0.44;
-    const baseH = s * 0.1;
-    const baseTopY = baseY - baseH;
-
+    // A vector pawn: base, collar, body (bell), and head. Drawn in white-ivory
+    // with shading so it reads as a chess piece on the field.
+    const s = size; // tile size scale reference
     ctx.save();
 
-    // Soft drop shadow on the grass.
-    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    // Drop shadow ellipse.
+    ctx.fillStyle = "rgba(0,0,0,0.30)";
     ctx.beginPath();
-    ctx.ellipse(cx, baseY + s * 0.01, baseW * 0.55, s * 0.05, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, baseY + s * 0.02, s * 0.30, s * 0.10, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // A warm ivory piece with a dark outline (classic chess look).
-    const fill = "#f3ead6";
-    const edge = "#3a2c18";
+    const grad = ctx.createLinearGradient(cx - s * 0.2, 0, cx + s * 0.2, 0);
+    grad.addColorStop(0, "#ffffff");
+    grad.addColorStop(0.5, "#f4efe4");
+    grad.addColorStop(1, "#cfc7b4");
+
+    const stroke = "#3a352c";
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = Math.max(1.5, s * 0.025);
     ctx.lineJoin = "round";
-    ctx.lineWidth = Math.max(1.5, s * 0.02);
-    ctx.strokeStyle = edge;
+    ctx.fillStyle = grad;
 
-    // Base (rounded trapezoid slab).
-    ctx.fillStyle = fill;
+    const topY = baseY - s * 0.62; // where the head sits
+
+    // Base (wide foot).
     ctx.beginPath();
-    ctx.moveTo(cx - baseW / 2, baseTopY + baseH);
-    ctx.lineTo(cx + baseW / 2, baseTopY + baseH);
-    ctx.lineTo(cx + baseW * 0.36, baseTopY);
-    ctx.lineTo(cx - baseW * 0.36, baseTopY);
+    ctx.moveTo(cx - s * 0.26, baseY);
+    ctx.quadraticCurveTo(cx - s * 0.30, baseY - s * 0.06, cx - s * 0.18, baseY - s * 0.09);
+    ctx.lineTo(cx + s * 0.18, baseY - s * 0.09);
+    ctx.quadraticCurveTo(cx + s * 0.30, baseY - s * 0.06, cx + s * 0.26, baseY);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Body: two curves sweeping from the base up to a narrow neck.
+    // Body (bell shape) from base up to collar.
     ctx.beginPath();
-    ctx.moveTo(cx - baseW * 0.34, baseTopY);
-    ctx.quadraticCurveTo(cx - s * 0.02, collarY, cx - neckW / 2, bodyTopY);
-    ctx.lineTo(cx + neckW / 2, bodyTopY);
-    ctx.quadraticCurveTo(cx + s * 0.02, collarY, cx + baseW * 0.34, baseTopY);
+    ctx.moveTo(cx - s * 0.16, baseY - s * 0.09);
+    ctx.quadraticCurveTo(cx - s * 0.22, baseY - s * 0.28, cx - s * 0.10, baseY - s * 0.34);
+    ctx.lineTo(cx + s * 0.10, baseY - s * 0.34);
+    ctx.quadraticCurveTo(cx + s * 0.22, baseY - s * 0.28, cx + s * 0.16, baseY - s * 0.09);
     ctx.closePath();
-    ctx.fillStyle = fill;
     ctx.fill();
     ctx.stroke();
 
-    // Collar ring under the head.
+    // Collar ring.
     ctx.beginPath();
-    ctx.ellipse(cx, collarY, s * 0.14, s * 0.045, 0, 0, Math.PI * 2);
-    ctx.fillStyle = fill;
+    ctx.ellipse(cx, baseY - s * 0.35, s * 0.13, s * 0.045, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Head (the sphere on top).
+    // Neck.
     ctx.beginPath();
-    ctx.arc(cx, headCy, headR, 0, Math.PI * 2);
-    ctx.fillStyle = fill;
+    ctx.moveTo(cx - s * 0.07, baseY - s * 0.36);
+    ctx.quadraticCurveTo(cx - s * 0.09, baseY - s * 0.44, cx - s * 0.05, baseY - s * 0.48);
+    ctx.lineTo(cx + s * 0.05, baseY - s * 0.48);
+    ctx.quadraticCurveTo(cx + s * 0.09, baseY - s * 0.44, cx + s * 0.07, baseY - s * 0.36);
+    ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // A soft highlight on the head for a little sheen.
+    // Head (sphere).
     ctx.beginPath();
-    ctx.arc(cx - headR * 0.3, headCy - headR * 0.3, headR * 0.4, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.arc(cx, topY + s * 0.02, s * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Head sheen.
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.beginPath();
+    ctx.arc(cx - s * 0.04, topY - s * 0.02, s * 0.04, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();
   }
 
-  // ── Draw everything ──────────────────────────────────────────────────────────
+  // ── Full draw ────────────────────────────────────────────────────────────────
 
   function draw() {
-    const vw = canvas.width / layout.dpr;
-    const vh = canvas.height / layout.dpr;
-
-    // Grassy surround behind the board (in case aspect ratios leave margins).
-    ctx.fillStyle = "#3f6a28";
-    ctx.fillRect(0, 0, vw, vh);
+    // Fill the whole viewport (a border of field color around the grid).
+    ctx.fillStyle = "#274d22";
+    ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
     const size = layout.tile;
-    const playerKey = Core.key(state.player.x, state.player.y);
+    const playerKey = Core.key(state.player.c, state.player.r);
 
-    for (let y = 0; y < ROWS; y++) {
-      for (let x = 0; x < COLS; x++) {
-        const { px, py } = tileToPixel(x, y);
-        const k = Core.key(x, y);
-        drawGrassTile(px, py, size, x, y, {
-          visited: state.visited.includes(k),
-          reachable: Core.canMoveTo(state, x, y),
-          hover: k === hoverKey,
-          isPlayer: k === playerKey,
-        });
-      }
+    for (const tile of Core.generateBoard(COLS, ROWS)) {
+      const { x, y } = tilePixel(tile.c, tile.r);
+      const k = Core.key(tile.c, tile.r);
+      drawGrassTile(x, y, size, tile.c, tile.r, {
+        reachable: Core.canMoveTo(state, tile.c, tile.r),
+        hover: k === hoverKey,
+        visited: state.visited.includes(k),
+        player: k === playerKey,
+      });
     }
 
-    // Player pawn on top of its tile.
-    const { px, py } = tileToPixel(state.player.x, state.player.y);
-    drawPawn(px + size / 2, py + size * 0.86, size);
-  }
-
-  // ── HUD + status ─────────────────────────────────────────────────────────────
-
-  function updateHud() {
-    moveCountEl.textContent = String(state.moves);
-    visitedCountEl.textContent = String(Core.visitedCount(state));
-  }
-
-  function setStatus(msg) {
-    statusEl.textContent = msg;
+    // Player on top, feet centered near the bottom of its tile.
+    const pp = tilePixel(state.player.c, state.player.r);
+    drawPawn(pp.x + size / 2, pp.y + size * 0.82, size);
   }
 
   // ── Input ─────────────────────────────────────────────────────────────────────
 
-  function eventToPixel(evt) {
+  function eventPixel(evt) {
     const rect = canvas.getBoundingClientRect();
     return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
   }
 
-  canvas.addEventListener("click", (evt) => {
-    const p = eventToPixel(evt);
-    const t = pixelToTile(p.x, p.y);
+  let statusTimer = null;
+  function setStatus(msg) {
+    statusEl.textContent = msg;
+    statusEl.classList.add("show");
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => statusEl.classList.remove("show"), 1800);
+  }
 
-    if (!Core.isOnBoard(t.x, t.y, COLS, ROWS)) return;
-    if (t.x === state.player.x && t.y === state.player.y) {
-      setStatus("Your piece is already on that square.");
+  function handleClick(px, py) {
+    const t = pixelToTile(px, py);
+    if (t.c === state.player.c && t.r === state.player.r) return;
+    if (!Core.isOnBoard(t.c, t.r, COLS, ROWS)) return;
+    if (!Core.canMoveTo(state, t.c, t.r)) {
+      setStatus("Only one tile at a time — pick an adjacent square.");
       return;
     }
-    if (!Core.canMoveTo(state, t.x, t.y)) {
-      setStatus("Only neighboring squares — up, down, left, or right.");
-      return;
-    }
-
-    state = Core.move(state, t.x, t.y);
-    hoverKey = null;
-    updateHud();
+    state = Core.move(state, t.c, t.r);
+    moveCountEl.textContent = String(state.moves);
+    visitedCountEl.textContent = String(Core.visitedCount(state));
     draw();
-    setStatus(`Moved to (${t.x}, ${t.y}). That's ${state.moves} move${state.moves === 1 ? "" : "s"}.`);
+    setStatus(`Move ${state.moves}`);
+  }
+
+  canvas.addEventListener("click", (evt) => {
+    const p = eventPixel(evt);
+    handleClick(p.x, p.y);
   });
 
   canvas.addEventListener("mousemove", (evt) => {
-    const p = eventToPixel(evt);
+    const p = eventPixel(evt);
     const t = pixelToTile(p.x, p.y);
     const k =
-      Core.isOnBoard(t.x, t.y, COLS, ROWS) && Core.canMoveTo(state, t.x, t.y)
-        ? Core.key(t.x, t.y)
+      Core.isOnBoard(t.c, t.r, COLS, ROWS) && Core.canMoveTo(state, t.c, t.r)
+        ? Core.key(t.c, t.r)
         : null;
     if (k !== hoverKey) {
       hoverKey = k;
+      canvas.style.cursor = k ? "pointer" : "default";
       draw();
     }
   });
@@ -319,15 +308,14 @@
   resetButton.addEventListener("click", () => {
     state = Core.createState(COLS, ROWS);
     hoverKey = null;
-    updateHud();
+    moveCountEl.textContent = "0";
+    visitedCountEl.textContent = "1";
     draw();
-    setStatus("Back to the center of the field.");
+    setStatus("Field reset");
   });
 
   window.addEventListener("resize", resize);
 
   // ── Boot ─────────────────────────────────────────────────────────────────────
-
-  updateHud();
   resize();
 })();

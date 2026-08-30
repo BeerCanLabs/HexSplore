@@ -1,127 +1,108 @@
-/* HexSplore — full-screen grassy field. The map is the whole game. */
-
 * {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html,
 body {
-  margin: 0;
-  padding: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
+  background: #2f5a29;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-body {
-  font-family: "DM Mono", ui-monospace, monospace;
-  background: #4b7a2f; /* deep grass, shown behind the canvas before it paints */
-  color: #f4f8ec;
-}
-
-/* The field canvas fills the entire viewport. */
 #board {
   position: fixed;
   inset: 0;
+  display: block;
   width: 100vw;
   height: 100vh;
-  display: block;
-  cursor: pointer;
-  touch-action: manipulation;
+  touch-action: none;
 }
 
-/* ── Floating HUD ─────────────────────────────────────────────────────────── */
+/* Floating HUD, top-left, glassy over the field */
 .hud {
   position: fixed;
   top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 2;
+  left: 16px;
+  z-index: 10;
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 10px 16px;
-  background: rgba(20, 32, 14, 0.62);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
+  gap: 14px;
+  padding: 10px 14px;
+  background: rgba(20, 40, 18, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
   backdrop-filter: blur(8px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: blur(8px);
+  color: #f2fbe9;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  user-select: none;
 }
 
-.hud-stat {
+.hud-item {
   display: flex;
   flex-direction: column;
-  align-items: center;
   line-height: 1.1;
 }
 
 .hud-label {
-  font-size: 0.6rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: #cfe6b6;
-  opacity: 0.85;
+  opacity: 0.75;
 }
 
 .hud-value {
-  font-size: 1.4rem;
-  font-weight: 500;
+  font-size: 1.5rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #ffffff;
-}
-
-.hud-sep {
-  width: 1px;
-  align-self: stretch;
-  background: rgba(255, 255, 255, 0.18);
 }
 
 .hud-reset {
   margin-left: 4px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: #f2fbe9;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #eef6e2;
-  border-radius: 999px;
-  padding: 8px 16px;
-  font-family: inherit;
-  font-size: 0.78rem;
+  border-radius: 10px;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .hud-reset:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.16);
   border-color: rgba(255, 255, 255, 0.4);
 }
 
-/* ── Status line ──────────────────────────────────────────────────────────── */
+/* Transient status message, bottom-center */
 .status {
   position: fixed;
   left: 50%;
-  bottom: 16px;
+  bottom: 20px;
   transform: translateX(-50%);
-  z-index: 2;
-  margin: 0;
-  padding: 8px 18px;
-  max-width: 92vw;
-  text-align: center;
-  font-size: 0.82rem;
-  color: #f2f8e8;
-  background: rgba(20, 32, 14, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  z-index: 10;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  color: #f2fbe9;
+  background: rgba(20, 40, 18, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 999px;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
   white-space: nowrap;
+  max-width: 90vw;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-@media (max-width: 520px) {
-  .hud {
-    gap: 12px;
-    padding: 8px 12px;
-  }
-  .hud-value {
-    font-size: 1.15rem;
-  }
+.status.show {
+  opacity: 1;
 }

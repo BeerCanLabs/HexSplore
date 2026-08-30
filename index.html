@@ -2,39 +2,27 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>HexSplore</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
     <link rel="stylesheet" href="style.css?v=2" />
   </head>
   <body>
-    <!-- The field IS the game: a full-screen grassy square grid. -->
-    <canvas id="board" aria-label="Grassy field"></canvas>
+    <canvas id="board"></canvas>
 
-    <!-- Minimal floating HUD overlaid on the field. -->
-    <div class="hud" role="group" aria-label="Game status">
-      <div class="hud-stat">
+    <!-- Minimal floating HUD over the full-screen map -->
+    <div class="hud" aria-label="Game statistics">
+      <div class="hud-item">
         <span class="hud-label">Moves</span>
         <span class="hud-value" id="move-count">0</span>
       </div>
-      <div class="hud-sep" aria-hidden="true"></div>
-      <div class="hud-stat">
+      <div class="hud-item">
         <span class="hud-label">Explored</span>
         <span class="hud-value" id="visited-count">1</span>
       </div>
-      <button type="button" id="reset-button" class="hud-reset" title="Start over">
-        Reset
-      </button>
+      <button type="button" id="reset-button" class="hud-reset" title="Start over">Reset</button>
     </div>
 
-    <p id="status" class="status" aria-live="polite">
-      Click a neighboring square to move your piece.
-    </p>
+    <div id="status" class="status" aria-live="polite"></div>
 
     <script src="game-core.js?v=2"></script>
     <script src="app.js?v=2"></script>
