@@ -127,7 +127,6 @@
     }
   }
 
-  // Backwards compatibility helper
   function generateNewRegion(startCol, endCol, startRow, endRow, obstacles) {
     const dummyTravelers = {};
     generateNewRegionAndTravelers(startCol, endCol, startRow, endRow, obstacles, dummyTravelers);
@@ -160,8 +159,23 @@
       }
     }
 
-    // 2. Set up initial revealed fog of war set (sight radius 0 = only starting tile revealed)
-    state.revealed = [key(start.c, start.r)];
+    // 2. Set up initial revealed fog of war set (sight radius 2 = 5x5 square)
+    const revealed = [key(start.c, start.r)];
+    const R_RANGE = 2;
+    for (let dr = -R_RANGE; dr <= R_RANGE; dr++) {
+      for (let dc = -R_RANGE; dc <= R_RANGE; dc++) {
+        const nc = start.c + dc;
+        const nr = start.r + dr;
+        if (isOnBoard(nc, nr, state)) {
+          const nk = key(nc, nr);
+          if (!revealed.includes(nk)) {
+            revealed.push(nk);
+          }
+        }
+      }
+    }
+
+    state.revealed = revealed;
   }
 
   // ── Game state ─────────────────────────────────────────────────────────────
@@ -207,15 +221,15 @@
     return true;
   }
 
-  // Attempt to move the player or discover a tile at (c, r).
+  // Attempt to move the player to (c, r). Reverts back to traditional FOG of war (sight range 2).
   // Returns a NEW state object; the input state is never mutated.
   function move(state, c, r) {
-    if (!isOnBoard(c, r, state)) return state;
-    
+    if (!canMoveTo(state, c, r)) return state;
+
     const k = key(c, r);
-    const dist = tileDistance(state.player.c, state.player.r, c, r);
-    const maxDist = (state.speedPotionMovesLeft && state.speedPotionMovesLeft > 0) ? 2 : 1;
-    if (dist < 1 || dist > maxDist) return state;
+    const visited = state.visited.includes(k)
+      ? state.visited.slice()
+      : state.visited.concat(k);
 
     let minCol = state.minCol;
     let maxCol = state.maxCol;
@@ -223,35 +237,9 @@
     let maxRow = state.maxRow;
     let obstacles = state.obstacles ? state.obstacles.slice() : [];
     let travelers = state.travelers ? { ...state.travelers } : {};
-    let revealed = state.revealed ? state.revealed.slice() : [];
-    let visited = state.visited ? state.visited.slice() : [];
     let gold = typeof state.gold === "number" ? state.gold : 0;
     let speedPotionMovesLeft = typeof state.speedPotionMovesLeft === "number" ? state.speedPotionMovesLeft : 0;
-    let player = { ...state.player };
-    let moves = state.moves;
 
-    const isObstacle = obstacles.includes(k);
-    const isTraveler = !!travelers[k];
-
-    // Case 1: Clicked an adjacent mountain obstacle or traveler (discover it, don't step on it)
-    if (isObstacle || isTraveler) {
-      if (!revealed.includes(k)) {
-        revealed.push(k);
-        gold += 1; // +1 Gold reward for mapping/discovering
-      }
-      moves += 1;
-      if (speedPotionMovesLeft > 0) speedPotionMovesLeft -= 1;
-
-      return {
-        ...state,
-        revealed,
-        moves,
-        gold,
-        speedPotionMovesLeft,
-      };
-    }
-
-    // Case 2: Clicked a valid grass tile or adjacent cloud grass tile (move there!)
     const expandLeft = (c === minCol);
     const expandRight = (c === maxCol);
     const expandUp = (r === minRow);
@@ -278,28 +266,29 @@
       generateNewRegionAndTravelers(minCol, maxCol, oldMax + 1, maxRow, obstacles, travelers);
     }
 
-    // Reveal target tile if not already revealed
+    // Reveal fog of war (traditional sight range 2 = 5x5 area centered on player)
+    let revealed = state.revealed ? state.revealed.slice() : [k];
     if (!revealed.includes(k)) {
       revealed.push(k);
-      gold += 1; // Gold reward for discovery
     }
-    if (!visited.includes(k)) {
-      visited.push(k);
-    }
-
-    // If moving 2 squares, also reveal the intermediate tile!
-    if (dist === 2) {
-      const intC = Math.round((player.c + c) / 2);
-      const intR = Math.round((player.r + r) / 2);
-      const intK = key(intC, intR);
-      if (!revealed.includes(intK)) {
-        revealed.push(intK);
-        gold += 1; // Gold reward for discovering the intermediate tile too
+    
+    const R_RANGE = 2;
+    for (let dr = -R_RANGE; dr <= R_RANGE; dr++) {
+      for (let dc = -R_RANGE; dc <= R_RANGE; dc++) {
+        const nc = c + dc;
+        const nr = r + dr;
+        const tempState = { minCol, maxCol, minRow, maxRow };
+        if (isOnBoard(nc, nr, tempState)) {
+          const nk = key(nc, nr);
+          if (!revealed.includes(nk)) {
+            revealed.push(nk);
+            gold += 1; // +1 Gold reward for discovering/revealing a new tile!
+          }
+        }
       }
     }
 
-    player = { c, r };
-    moves += 1;
+    const moves = state.moves + 1;
     if (speedPotionMovesLeft > 0) speedPotionMovesLeft -= 1;
 
     return {
@@ -309,7 +298,7 @@
       maxRow,
       cols: maxCol - minCol + 1,
       rows: maxRow - minRow + 1,
-      player,
+      player: { c, r },
       moves,
       visited,
       obstacles,
@@ -317,7 +306,7 @@
       revealed,
       gold,
       speedPotionMovesLeft,
-      inventory: state.inventory, // preserve inventory on move
+      inventory: state.inventory,
     };
   }
 

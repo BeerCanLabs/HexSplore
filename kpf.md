@@ -26,7 +26,7 @@ keep passing on every commit (`npm test`, Node's built-in runner, no deps).
 | Dynamic Expansion Right | Landing on the right-most boundary tile dynamically expands the board by 3 columns of new terrain to the right. | `moving to right boundary expands board to right` |
 | Dynamic Expansion Up | Landing on the top-most boundary tile dynamically expands the board by 3 rows of new terrain upward (negative coordinates). | `moving to top boundary expands board upward` |
 | Dynamic Expansion Down | Landing on the bottom-most boundary tile dynamically expands the board by 3 rows of new terrain downward. | `moving to bottom boundary expands board downward` |
-| Discovery Gold | Discovering any tile (stepping on it or bumping into a mountain) awards +1 Gold. | `discovering a tile under clouds awards +1 Gold`, `bumping into cloud obstacle reveals it and increments moves and awards gold` |
+| Discovery Gold | Discovering any tile (when it enters your 5x5 sight range) awards +1 Gold. | `discovering a tile under clouds awards +1 Gold` |
 | Traveler Generation | Travelers generate like mountains but way less often, and they act as solid shops. | `travelers are generated in rich mode and are impassable` |
 | Speed Potion | Speed Potion lets you move up to 2 squares. Lasts 10 moves. | `speed potion allows distance-2 moves and decrements appropriately` |
 

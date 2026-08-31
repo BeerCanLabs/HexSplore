@@ -118,34 +118,38 @@
     };
   }
 
-  // ── Fluffy Cloud Vector Rendering (Fog of War) ─────────────────────────────
+  // ── Cosmetic Cloud Tiles (Fog of War) ──────────────────────────────────────
 
   function drawCloudTile(x, y, size, rand) {
     ctx.save();
-    
-    // Draw 5 overlapping puffed circles inside the tile to form a cumulative soft cloud layer
-    const numPuffs = 5;
-    
-    ctx.shadowColor = "rgba(15, 23, 42, 0.08)";
-    ctx.shadowBlur = size * 0.08;
-    
-    for (let i = 0; i < numPuffs; i++) {
-      const px = x + size * 0.15 + rand() * (size * 0.7);
-      const py = y + size * 0.15 + rand() * (size * 0.7);
-      const pr = size * 0.20 + rand() * (size * 0.15);
-      
-      // Shadow layer
-      ctx.fillStyle = "rgba(226, 232, 240, 0.94)"; // slate-grey puffy cloud
-      ctx.beginPath();
-      ctx.arc(px + size * 0.02, py + size * 0.02, pr, 0, Math.PI * 2);
-      ctx.fill();
 
-      // Highlight layer
-      ctx.fillStyle = "rgba(255, 255, 255, 0.98)"; // bright white highlight
-      ctx.beginPath();
-      ctx.arc(px, py, pr, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // 1. Soft sky/mist tile background
+    ctx.fillStyle = "#cbd5e1"; // slate-300
+    ctx.fillRect(x, y, size, size);
+
+    // 2. Subtle grid border so clouds look like cohesive square tiles
+    ctx.strokeStyle = "rgba(15, 23, 42, 0.12)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+
+    // 3. Cute puffy cartoon cloud centered inside the tile boundaries
+    const cx = x + size / 2;
+    const cy = y + size / 2;
+    const r = size * 0.18; // base puff radius
+
+    ctx.shadowColor = "rgba(15, 23, 42, 0.05)";
+    ctx.shadowBlur = size * 0.04;
+
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    // Left puff
+    ctx.arc(cx - r * 0.7, cy + r * 0.2, r * 0.8, 0, Math.PI * 2);
+    // Right puff
+    ctx.arc(cx + r * 0.7, cy + r * 0.2, r * 0.8, 0, Math.PI * 2);
+    // Center top puff
+    ctx.arc(cx, cy - r * 0.2, r * 1.1, 0, Math.PI * 2);
+    
+    ctx.fill();
 
     ctx.restore();
   }
@@ -525,7 +529,7 @@
       const rand = rngFor(tile.c, tile.r);
 
       if (!isRevealed) {
-        // Shrouded in fluffy clouds
+        // Shrouded in beautifully bounded square Cloud Tiles
         drawCloudTile(x, y, size, rand);
       } else {
         // Walkable indicators are only on revealed reachable tiles
@@ -700,43 +704,27 @@
       return;
     }
 
-    if (isRevealed) {
-      // If it's a mountain, impassable
-      if (state.obstacles && state.obstacles.includes(k)) {
-        setStatus("Those high snowy mountains are impassable!");
-        return;
-      }
-
-      // If it's a traveler, open shop!
-      if (state.travelers && state.travelers[k]) {
-        openShop(k);
-        return;
-      }
+    // Reverted Rule: You can only step onto already revealed tiles!
+    if (!isRevealed) {
+      setStatus("You cannot step blindly into deep cloud cover!");
+      return;
     }
 
-    // Capture state for comparison before move
-    const isCloud = !isRevealed;
-    const oldObstacles = state.obstacles.slice();
-    const oldTravelers = { ...state.travelers };
+    // If it's a mountain, impassable
+    if (state.obstacles && state.obstacles.includes(k)) {
+      setStatus("Those high snowy mountains are impassable!");
+      return;
+    }
 
-    // Execute Move/Discovery in core
+    // If it's a traveler, open shop!
+    if (state.travelers && state.travelers[k]) {
+      openShop(k);
+      return;
+    }
+
+    // Execute Move in core
     state = Core.move(state, t.c, t.r);
-
-    if (isCloud) {
-      const isObstacle = oldObstacles.includes(k) || state.obstacles.includes(k);
-      const isTraveler = !!(oldTravelers[k] || (state.travelers && state.travelers[k]));
-
-      if (isObstacle) {
-        setStatus("🏔️ You bumped into a mountain under the clouds! (+1 Gold)");
-      } else if (isTraveler) {
-        setStatus("🧙 You met a mysterious traveler under the clouds! (+1 Gold)");
-        openShop(k);
-      } else {
-        setStatus("☁️ The clouds parted, revealing a grassy clearing! (+1 Gold)");
-      }
-    } else {
-      setStatus(`Move ${state.moves}`);
-    }
+    setStatus(`Move ${state.moves}`);
 
     syncHUD();
     draw();
