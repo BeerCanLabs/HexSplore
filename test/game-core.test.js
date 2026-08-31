@@ -194,15 +194,14 @@ test("KPF: cannot move into mountain obstacles", () => {
   assert.equal(canMoveTo(s, s.player.c + 1, s.player.r), false);
 });
 
-test("KPF: fog of war reveals adjacent areas on move", () => {
+test("KPF: fog of war reveals the visited tile (sight range 0)", () => {
   let s = createState(12, 9);
   s.revealed = [key(s.player.c, s.player.r)]; // Reset to just center
   s = move(s, s.player.c + 1, s.player.r);
   
-  // Chebyshev distance 2 means (c+2, r+2) should be revealed
-  const farKey = key(s.player.c + 1, s.player.r);
-  assert.ok(s.revealed.includes(farKey));
-  assert.ok(s.revealed.includes(key(s.player.c + 2, s.player.r + 2)));
+  // Player is at (7,4). (7,4) is revealed, but (8,4) is still shrouded in clouds
+  assert.ok(s.revealed.includes(key(7, 4)));
+  assert.equal(s.revealed.includes(key(8, 4)), false);
 });
 
 // ── Boundary Expansion Mechanics ───────────────────────────────────────────────
@@ -269,4 +268,68 @@ test("KPF: moving to bottom boundary expands board downward", () => {
   assert.equal(s.maxRow, startMaxRow + 3);
   assert.equal(s.minRow, 0);
   assert.equal(s.rows, 12);
+});
+
+// ── Traveler, Inventory, Gold, and Speed Potion Mechanics ───────────────────────
+
+test("KPF: travelers are generated in rich mode and are impassable", () => {
+  const s = createState(12, 9, { richMode: true });
+  assert.ok(s.travelers && typeof s.travelers === "object");
+  
+  // Place a manual traveler at neighbor and assert impassability
+  s.travelers[key(s.player.c + 1, s.player.r)] = { style: "staff" };
+  assert.equal(canMoveTo(s, s.player.c + 1, s.player.r), false);
+});
+
+test("KPF: discovering a tile under clouds awards +1 Gold", () => {
+  let s = createState(12, 9);
+  assert.equal(s.gold, 0);
+  
+  // Move to unrevealed neighbor (c+1, r)
+  const targetC = s.player.c + 1;
+  const targetR = s.player.r;
+  const targetK = key(targetC, targetR);
+  
+  // Remove from revealed to simulate cloud
+  s.revealed = s.revealed.filter(k => k !== targetK);
+  
+  s = move(s, targetC, targetR);
+  assert.equal(s.gold, 1);
+});
+
+test("KPF: speed potion allows distance-2 moves and decrements appropriately", () => {
+  let s = createState(12, 9);
+  
+  // Normal move at distance 2 is illegal
+  assert.equal(canMoveTo(s, s.player.c + 2, s.player.r), false);
+  
+  // Activate speed potion
+  s.speedPotionMovesLeft = 10;
+  
+  // Now distance 2 is legal
+  assert.ok(canMoveTo(s, s.player.c + 2, s.player.r));
+  
+  // Move distance 2
+  s = move(s, s.player.c + 2, s.player.r);
+  assert.equal(s.player.c, 8); // moved 2 squares
+  assert.equal(s.speedPotionMovesLeft, 9); // decremented by 1
+});
+
+test("KPF: bumping into cloud obstacle reveals it and increments moves and awards gold", () => {
+  let s = createState(12, 9);
+  const targetC = s.player.c + 1;
+  const targetR = s.player.r;
+  const targetK = key(targetC, targetR);
+  
+  // Put a mountain there and hide under cloud
+  s.obstacles.push(targetK);
+  s.revealed = s.revealed.filter(k => k !== targetK);
+  
+  s = move(s, targetC, targetR);
+  
+  // Player shouldn't have moved, but mountain is now revealed, move count incremented, gold awarded
+  assert.deepEqual(s.player, { c: 6, r: 4 });
+  assert.ok(s.revealed.includes(targetK));
+  assert.equal(s.moves, 1);
+  assert.equal(s.gold, 1);
 });

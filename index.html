@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>HexSplore</title>
-    <link rel="stylesheet" href="style.css?v=4" />
+    <link rel="stylesheet" href="style.css?v=5" />
   </head>
   <body>
     <canvas id="board"></canvas>
@@ -19,12 +19,75 @@
         <span class="hud-label">Explored</span>
         <span class="hud-value" id="visited-count">1</span>
       </div>
+      <div class="hud-item">
+        <span class="hud-label">Gold</span>
+        <span class="hud-value" id="gold-count">0</span>
+      </div>
       <button type="button" id="reset-button" class="hud-reset" title="Start over">Reset</button>
+    </div>
+
+    <!-- Floating Inventory HUD - bottom middle, moves with the camera -->
+    <div class="inventory-hud" id="inventory-hud" aria-label="Inventory">
+      <div class="inventory-title">Inventory</div>
+      <div class="inventory-slots">
+        <div class="inventory-slot" id="slot-potion" title="Drink Speed Potion (Range: 2, Lasts: 10 moves)">
+          <span class="inventory-icon">🧪</span>
+          <span class="inventory-qty" id="qty-potion">0</span>
+        </div>
+        <div class="inventory-slot" id="slot-sword" title="Iron Sword (Does nothing for now)">
+          <span class="inventory-icon">⚔️</span>
+          <span class="inventory-qty" id="qty-sword">0</span>
+        </div>
+        <div class="inventory-slot" id="slot-berries" title="Forest Berries (Does nothing for now)">
+          <span class="inventory-icon">🍒</span>
+          <span class="inventory-qty" id="qty-berries">0</span>
+        </div>
+      </div>
+      <div id="potion-buff" class="potion-buff" hidden>
+        ⚡ Potion active: <span id="potion-moves">0</span> moves
+      </div>
+    </div>
+
+    <!-- Traveler's Shop Overlay -->
+    <div class="shop-overlay" id="shop-overlay" hidden>
+      <div class="shop-panel">
+        <button type="button" class="shop-close" id="shop-close">✕</button>
+        <h2 class="shop-title">🧙 Traveler's Shop</h2>
+        <p class="shop-subtitle">"Welcome, explorer! What can I interest you in?"</p>
+        <div class="shop-gold-display">Your Gold: <span id="shop-gold">0</span> 🪙</div>
+        
+        <div class="shop-items">
+          <div class="shop-item">
+            <span class="shop-item-icon">🧪</span>
+            <div class="shop-item-details">
+              <strong class="shop-item-name">Speed Potion</strong>
+              <span class="shop-item-desc">Lets you move 2 squares forward instead of 1. Lasts 10 moves.</span>
+            </div>
+            <button type="button" class="shop-item-buy" id="buy-potion">10 🪙</button>
+          </div>
+          <div class="shop-item">
+            <span class="shop-item-icon">⚔️</span>
+            <div class="shop-item-details">
+              <strong class="shop-item-name">Iron Sword</strong>
+              <span class="shop-item-desc">A sharp and solid blade. (Does nothing for now)</span>
+            </div>
+            <button type="button" class="shop-item-buy" id="buy-sword">25 🪙</button>
+          </div>
+          <div class="shop-item">
+            <span class="shop-item-icon">🍒</span>
+            <div class="shop-item-details">
+              <strong class="shop-item-name">Forest Berries</strong>
+              <span class="shop-item-desc">Sweet, tart forest berries. (Does nothing for now)</span>
+            </div>
+            <button type="button" class="shop-item-buy" id="buy-berries">5 🪙</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div id="status" class="status" aria-live="polite"></div>
 
-    <script src="game-core.js?v=4"></script>
-    <script src="app.js?v=4"></script>
+    <script src="game-core.js?v=5"></script>
+    <script src="app.js?v=5"></script>
   </body>
 </html>

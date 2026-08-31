@@ -17,8 +17,25 @@
 
   const moveCountEl = document.getElementById("move-count");
   const visitedCountEl = document.getElementById("visited-count");
+  const goldCountEl = document.getElementById("gold-count");
   const statusEl = document.getElementById("status");
   const resetButton = document.getElementById("reset-button");
+
+  // Shop overlay elements
+  const shopOverlay = document.getElementById("shop-overlay");
+  const shopCloseBtn = document.getElementById("shop-close");
+  const shopGoldEl = document.getElementById("shop-gold");
+  const buyPotionBtn = document.getElementById("buy-potion");
+  const buySwordBtn = document.getElementById("buy-sword");
+  const buyBerriesBtn = document.getElementById("buy-berries");
+
+  // Inventory HUD elements
+  const qtyPotionEl = document.getElementById("qty-potion");
+  const qtySwordEl = document.getElementById("qty-sword");
+  const qtyBerriesEl = document.getElementById("qty-berries");
+  const slotPotionBtn = document.getElementById("slot-potion");
+  const potionBuffEl = document.getElementById("potion-buff");
+  const potionMovesEl = document.getElementById("potion-moves");
 
   const COLS = Core.DEFAULT_COLS; // 12
   const ROWS = Core.DEFAULT_ROWS; // 9
@@ -32,6 +49,9 @@
   // Manual camera offset. Initialized to center on player spawn coordinates.
   let camX = 0;
   let camY = 0;
+
+  // Track the coordinate key of the currently open traveler shop (null if closed)
+  let activeShopTravelerKey = null;
 
   // Per-tile deterministic RNG seed so grass tufts & mountain shapes stay stable across redraws.
   function tileSeed(c, r) {
@@ -363,6 +383,125 @@
     ctx.restore();
   }
 
+  // ── Vector Traveler Drawing ──────────────────────────────────────────────────
+
+  function drawTraveler(cx, baseY, size, style) {
+    const s = size;
+    ctx.save();
+
+    // Shadow
+    ctx.fillStyle = "rgba(0,0,0,0.32)";
+    ctx.beginPath();
+    ctx.ellipse(cx, baseY + s * 0.02, s * 0.30, s * 0.10, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Purple / Indigo robes gradient for the mysterious shop traveler
+    const grad = ctx.createLinearGradient(cx - s * 0.2, 0, cx + s * 0.2, 0);
+    grad.addColorStop(0, "#c084fc"); // purple-400
+    grad.addColorStop(0.5, "#7e22ce"); // purple-700
+    grad.addColorStop(1, "#4c1d95"); // purple-950
+
+    const stroke = "#3a352c";
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = Math.max(1.5, s * 0.025);
+    ctx.lineJoin = "round";
+    ctx.fillStyle = grad;
+
+    const topY = baseY - s * 0.62;
+
+    // Base
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.26, baseY);
+    ctx.quadraticCurveTo(cx - s * 0.30, baseY - s * 0.06, cx - s * 0.18, baseY - s * 0.09);
+    ctx.lineTo(cx + s * 0.18, baseY - s * 0.09);
+    ctx.quadraticCurveTo(cx + s * 0.30, baseY - s * 0.06, cx + s * 0.26, baseY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Body
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.16, baseY - s * 0.09);
+    ctx.quadraticCurveTo(cx - s * 0.22, baseY - s * 0.28, cx - s * 0.10, baseY - s * 0.34);
+    ctx.lineTo(cx + s * 0.10, baseY - s * 0.34);
+    ctx.quadraticCurveTo(cx + s * 0.22, baseY - s * 0.28, cx + s * 0.16, baseY - s * 0.09);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Collar
+    ctx.beginPath();
+    ctx.ellipse(cx, baseY - s * 0.35, s * 0.13, s * 0.045, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Neck
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.07, baseY - s * 0.36);
+    ctx.quadraticCurveTo(cx - s * 0.09, baseY - s * 0.44, cx - s * 0.05, baseY - s * 0.48);
+    ctx.lineTo(cx + s * 0.05, baseY - s * 0.48);
+    ctx.quadraticCurveTo(cx + s * 0.09, baseY - s * 0.44, cx + s * 0.07, baseY - s * 0.36);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Head
+    ctx.beginPath();
+    ctx.arc(cx, topY + s * 0.02, s * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Highlight
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.beginPath();
+    ctx.arc(cx - s * 0.04, topY - s * 0.02, s * 0.04, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cosmetic accessories
+    if (style === "staff") {
+      // Draw a staff held in hand
+      ctx.strokeStyle = "#78350f"; // warm brown
+      ctx.lineWidth = Math.max(1.5, s * 0.025);
+      ctx.beginPath();
+      ctx.moveTo(cx - s * 0.22, baseY);
+      ctx.lineTo(cx - s * 0.22, baseY - s * 0.72);
+      ctx.stroke();
+
+      // Golden orb on top of staff
+      ctx.fillStyle = "#fbbf24";
+      ctx.strokeStyle = "#3a352c";
+      ctx.beginPath();
+      ctx.arc(cx - s * 0.22, baseY - s * 0.75, s * 0.06, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (style === "bag") {
+      // Leather traveler pack resting on the ground
+      ctx.fillStyle = "#a16207"; // leather brown
+      ctx.strokeStyle = "#3a352c";
+      ctx.lineWidth = Math.max(1, s * 0.015);
+      
+      const bx = cx + s * 0.18;
+      const by = baseY - s * 0.12;
+      const bw = s * 0.18;
+      const bh = s * 0.14;
+      
+      ctx.beginPath();
+      ctx.rect(bx, by, bw, bh);
+      ctx.fill();
+      ctx.stroke();
+
+      // Bag strap crossing body
+      ctx.strokeStyle = "#713f12";
+      ctx.lineWidth = Math.max(1, s * 0.015);
+      ctx.beginPath();
+      ctx.moveTo(cx - s * 0.1, baseY - s * 0.30);
+      ctx.lineTo(bx + bw / 2, by + bh / 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
   // ── Full draw ────────────────────────────────────────────────────────────────
 
   function draw() {
@@ -404,6 +543,12 @@
         const isObstacle = state.obstacles && state.obstacles.includes(k);
         if (isObstacle) {
           drawMountain(x, y, size, rand);
+        }
+
+        // If traveler is present, draw him!
+        const traveler = state.travelers && state.travelers[k];
+        if (traveler) {
+          drawTraveler(x + size / 2, y + size * 0.82, size, traveler.style);
         }
       }
     }
@@ -447,8 +592,8 @@
     isPanning = false;
     canvas.style.cursor = "default";
     
-    // If barely moved, treat as a coordinate click to step the pawn!
-    if (totalDragDistance < 6) {
+    // Increased drag threshold from 6 to 15 to completely eliminate glitchy step triggers!
+    if (totalDragDistance < 15) {
       const rect = canvas.getBoundingClientRect();
       const px = clientX - rect.left;
       const py = clientY - rect.top;
@@ -456,10 +601,13 @@
     }
   }
 
-  // Mouse Listeners
-  canvas.addEventListener("mousedown", (evt) => handleStart(evt.clientX, evt.clientY));
+  // Mouse Listeners bound to window so they are extremely stable even when exiting viewport!
+  canvas.addEventListener("mousedown", (evt) => {
+    if (evt.button !== 0) return; // only left click initiates pan
+    handleStart(evt.clientX, evt.clientY);
+  });
   
-  canvas.addEventListener("mousemove", (evt) => {
+  window.addEventListener("mousemove", (evt) => {
     if (isPanning) {
       handleMove(evt.clientX, evt.clientY);
     } else {
@@ -482,24 +630,27 @@
     }
   });
   
-  canvas.addEventListener("mouseup", (evt) => handleEnd(evt.clientX, evt.clientY));
-  canvas.addEventListener("mouseleave", () => { isPanning = false; });
+  window.addEventListener("mouseup", (evt) => {
+    if (isPanning) {
+      handleEnd(evt.clientX, evt.clientY);
+    }
+  });
 
-  // Touch/Mobile Listeners
+  // Touch/Mobile Listeners bound to window for seamless mobile experience
   canvas.addEventListener("touchstart", (evt) => {
     if (evt.touches.length === 1) {
       handleStart(evt.touches[0].clientX, evt.touches[0].clientY);
     }
   });
 
-  canvas.addEventListener("touchmove", (evt) => {
-    if (evt.touches.length === 1) {
+  window.addEventListener("touchmove", (evt) => {
+    if (isPanning && evt.touches.length === 1) {
       handleMove(evt.touches[0].clientX, evt.touches[0].clientY);
     }
-  });
+  }, { passive: true });
 
-  canvas.addEventListener("touchend", (evt) => {
-    if (evt.changedTouches.length === 1) {
+  window.addEventListener("touchend", (evt) => {
+    if (isPanning && evt.changedTouches.length === 1) {
       handleEnd(evt.changedTouches[0].clientX, evt.changedTouches[0].clientY);
     }
   });
@@ -510,13 +661,27 @@
     statusEl.textContent = msg;
     statusEl.classList.add("show");
     clearTimeout(statusTimer);
-    statusTimer = setTimeout(() => statusEl.classList.remove("show"), 1800);
+    statusTimer = setTimeout(() => statusEl.classList.remove("show"), 2600);
   }
   let statusTimer = null;
 
   function syncHUD() {
     moveCountEl.textContent = String(state.moves);
     visitedCountEl.textContent = String(Core.visitedCount(state));
+    goldCountEl.textContent = String(state.gold);
+
+    // Sync Inventory Quantities
+    qtyPotionEl.textContent = String(state.inventory.potion || 0);
+    qtySwordEl.textContent = String(state.inventory.sword || 0);
+    qtyBerriesEl.textContent = String(state.inventory.berries || 0);
+
+    // Sync Speed Potion active buff UI
+    if (state.speedPotionMovesLeft > 0) {
+      potionBuffEl.hidden = false;
+      potionMovesEl.textContent = String(state.speedPotionMovesLeft);
+    } else {
+      potionBuffEl.hidden = true;
+    }
   }
 
   function handleClick(px, py) {
@@ -526,29 +691,49 @@
 
     const k = Core.key(t.c, t.r);
     const isRevealed = state.revealed && state.revealed.includes(k);
-    
-    if (!isRevealed) {
-      setStatus("You cannot step blindly into deep cloud cover!");
+
+    const dist = Core.tileDistance(state.player.c, state.player.r, t.c, t.r);
+    const maxDist = state.speedPotionMovesLeft > 0 ? 2 : 1;
+
+    if (dist < 1 || dist > maxDist) {
+      setStatus("That tile is too far away to reach!");
       return;
     }
 
-    if (!Core.canMoveTo(state, t.c, t.r)) {
-      setStatus("Those high snowy mountains are impassable!");
-      return;
+    if (isRevealed) {
+      // If it's a mountain, impassable
+      if (state.obstacles && state.obstacles.includes(k)) {
+        setStatus("Those high snowy mountains are impassable!");
+        return;
+      }
+
+      // If it's a traveler, open shop!
+      if (state.travelers && state.travelers[k]) {
+        openShop(k);
+        return;
+      }
     }
 
-    const oldMinCol = state.minCol;
-    const oldMaxCol = state.maxCol;
-    const oldMinRow = state.minRow;
-    const oldMaxRow = state.maxRow;
+    // Capture state for comparison before move
+    const isCloud = !isRevealed;
+    const oldObstacles = state.obstacles.slice();
+    const oldTravelers = { ...state.travelers };
 
+    // Execute Move/Discovery in core
     state = Core.move(state, t.c, t.r);
-    
-    const expanded = (state.minCol !== oldMinCol || state.maxCol !== oldMaxCol || 
-                      state.minRow !== oldMinRow || state.maxRow !== oldMaxRow);
 
-    if (expanded) {
-      setStatus("☁️ The clouds recede as new territory is revealed!");
+    if (isCloud) {
+      const isObstacle = oldObstacles.includes(k) || state.obstacles.includes(k);
+      const isTraveler = !!(oldTravelers[k] || (state.travelers && state.travelers[k]));
+
+      if (isObstacle) {
+        setStatus("🏔️ You bumped into a mountain under the clouds! (+1 Gold)");
+      } else if (isTraveler) {
+        setStatus("🧙 You met a mysterious traveler under the clouds! (+1 Gold)");
+        openShop(k);
+      } else {
+        setStatus("☁️ The clouds parted, revealing a grassy clearing! (+1 Gold)");
+      }
     } else {
       setStatus(`Move ${state.moves}`);
     }
@@ -557,9 +742,73 @@
     draw();
   }
 
+  // ── Shop Operations ─────────────────────────────────────────────────────────
+
+  function openShop(travelerKey) {
+    activeShopTravelerKey = travelerKey;
+    shopGoldEl.textContent = String(state.gold);
+    
+    // Disable/Enable buy buttons based on gold
+    buyPotionBtn.disabled = state.gold < 10;
+    buySwordBtn.disabled = state.gold < 25;
+    buyBerriesBtn.disabled = state.gold < 5;
+
+    shopOverlay.hidden = false;
+  }
+
+  function closeShop() {
+    activeShopTravelerKey = null;
+    shopOverlay.hidden = true;
+  }
+
+  function buyItem(itemType, cost) {
+    if (state.gold < cost) {
+      setStatus("You do not have enough Gold!");
+      return;
+    }
+    state.gold -= cost;
+    state.inventory[itemType] = (state.inventory[itemType] || 0) + 1;
+    
+    setStatus(`Bought a ${itemType === "potion" ? "Speed Potion" : itemType === "sword" ? "Iron Sword" : "Berries"} for ${cost} Gold!`);
+    
+    // Sync UI
+    syncHUD();
+    if (activeShopTravelerKey) {
+      openShop(activeShopTravelerKey); // refresh shop dialog states
+    }
+  }
+
+  // Wire up buy buttons
+  buyPotionBtn.addEventListener("click", () => buyItem("potion", 10));
+  buySwordBtn.addEventListener("click", () => buyItem("sword", 25));
+  buyBerriesBtn.addEventListener("click", () => buyItem("berries", 5));
+
+  // Wire up close shop
+  shopCloseBtn.addEventListener("click", closeShop);
+  shopOverlay.addEventListener("click", (evt) => {
+    if (evt.target === shopOverlay) closeShop();
+  });
+
+  // ── Drink Speed Potion ──────────────────────────────────────────────────────
+
+  slotPotionBtn.addEventListener("click", () => {
+    if (!state.inventory.potion || state.inventory.potion <= 0) {
+      setStatus("You don't have any Speed Potions to drink!");
+      return;
+    }
+    state.inventory.potion--;
+    state.speedPotionMovesLeft = 10;
+    setStatus("🧪 Gulp! Speed Potion active. Move 2 squares for 10 moves!");
+    syncHUD();
+    draw();
+  });
+
+  // ── Reset & Boot ───────────────────────────────────────────────────────────
+
   function startNewGame() {
     state = Core.createState(COLS, ROWS, { richMode: true });
     hoverKey = null;
+    closeShop();
     resetCamera();
     syncHUD();
     draw();
@@ -569,7 +818,14 @@
   resetButton.addEventListener("click", startNewGame);
   window.addEventListener("resize", resize);
 
-  // ── Boot ─────────────────────────────────────────────────────────────────────
+  // Keyboard shortcut to close shop with Escape
+  document.addEventListener("keydown", (evt) => {
+    if (evt.key === "Escape") {
+      closeShop();
+    }
+  });
+
+  // Boot the game
   syncHUD();
   resize();
 })();
