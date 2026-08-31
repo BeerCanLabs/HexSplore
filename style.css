@@ -190,6 +190,10 @@ body {
   animation: fadeIn 0.2s ease;
 }
 
+.shop-overlay[hidden] {
+  display: none !important;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
