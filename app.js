@@ -754,11 +754,13 @@
     buyBerriesBtn.disabled = state.gold < 5;
 
     shopOverlay.hidden = false;
+    shopOverlay.style.display = "flex";
   }
 
   function closeShop() {
     activeShopTravelerKey = null;
     shopOverlay.hidden = true;
+    shopOverlay.style.display = "none";
   }
 
   function buyItem(itemType, cost) {
@@ -826,6 +828,7 @@
   });
 
   // Boot the game
+  closeShop();
   syncHUD();
   resize();
 })();
