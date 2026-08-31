@@ -1,0 +1,13 @@
+# DRAFT Software Deployment Pattern Manifest
+schema_version: "1.0.5"
+metadata:
+  name: "HexSplore"
+  organization: "BeerCanLabs"
+  catalog_status: "complete"
+
+components:
+  - id: "component-HexSplore"
+    name: "HexSplore Game Client"
+    component_type: "product_component"
+    substrate: "github_pages"
+    acceptable_use_status: "approved"
